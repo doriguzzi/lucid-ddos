@@ -380,10 +380,8 @@ def train_test_split(flow_list,train_size=TRAIN_SIZE, shuffle=True):
 def main(argv):
     command_options = " ".join(str(x) for x in argv[1:])
 
-    help_string = 'Usage[0]: python3 lucid-dataset-parser.py --dataset_type <dataset_name> --dataset_folder <folder path> --output_folder <path> \n' \
-                  'Usage[1]: python3 lucid-dataset-parser.py --preprocess_folder <folder path> --output_folder <path> --samples <number> \n' \
-                  'Usage[1]: python3 lucid-dataset-parser.py --preprocess_file <file path> --output_folder <path> --samples <number> \n' \
-                  'Usage[2]: python3 lucid-dataset-parser.py --balance_folder <folder list> --output_folder <path>'
+    help_string = 'Usage[0]: python3 lucid-dataset-parser.py --dataset_type <dataset_name> --dataset_folder <folder path> --dataset_id <dataset identifier> --packets_per_flow <n> --time_window <t>\n' \
+                  'Usage[1]: python3 lucid-dataset-parser.py --preprocess_folder <folder path>'
     manager = Manager()
 
     parser = argparse.ArgumentParser(
@@ -394,7 +392,7 @@ def main(argv):
                         help='Folder with the dataset')
     parser.add_argument('-o', '--output_folder', nargs='+', type=str,
                         help='Output folder')
-    parser.add_argument('-f', '--traffic_type', nargs='+', type=str,
+    parser.add_argument('-f', '--traffic_type', default='all', nargs='+', type=str,
                         help='Type of flow to process (all, benign, ddos)')
     parser.add_argument('-p', '--preprocess_folder', nargs='+', type=str,
                         help='Folder with preprocessed data')
@@ -734,7 +732,6 @@ def main(argv):
 
 
     if args.dataset_folder is None and args.preprocess_folder is None and args.preprocess_file is None and args.balance_folder is None:
-        print ("Please provide either the folder with the dataset or the folder with the preprocessed data!")
         print (help_string)
     if args.dataset_type is None and args.dataset_folder is not None:
         print("Please specify the type of the label file (e.g., IDS2012, IDS2017)!")
