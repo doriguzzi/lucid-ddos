@@ -39,7 +39,7 @@ And finalise the installation with a few more packages:
 (myenv)$ pip3 install pyshark sklearn
 ```
 
-Please note that Pyshark is just Python wrapper for tshark, allowing python packet parsing using wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS use  the following command:
+Please note that Pyshark is just a Python wrapper for tshark that allows packet parsing through wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS use  the following command:
 
 ```
 sudo apt install tshark
