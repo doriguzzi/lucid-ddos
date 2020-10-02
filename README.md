@@ -200,7 +200,7 @@ TN      FP      FN      TP      DatasetName
 
 Where ```TIME``` is the execution time, ```PACKETS``` is the number of packets present in the test set as part of the samples, ```PKT/SEC``` is the number of packet processed in a second (useful in online system to understand the max throughput supported by LUCID on the testing machine), ```SAMPLE/SEC``` is the number of samples processed in a second, ```ERR``` is the total loss on the test set (binary cross entropy),  ```PRE     REC     F1      AUC```  are precision, recall, F1 score and area under the curve respectively, ```TN      FP      FN      TP``` are the true negative, false positive, false negative and true positive rates respectively. 
 
-The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output is formed by multiple lines, on for each test set. 
+The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output is formed by multiple lines, one for each test set. 
 
 ## 
 
