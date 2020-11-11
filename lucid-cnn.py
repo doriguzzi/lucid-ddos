@@ -15,8 +15,8 @@
 # limitations under the License.
 
 #Sample commands
-# Training: python3.6 lucid-cnn.py --train ./sample-dataset/  --epochs 100
-# Testing: python3.6  lucid-cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5
+# Training: python3 lucid-cnn.py --train ./sample-dataset/  --epochs 100
+# Testing: python3  lucid-cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5
 
 import tensorflow as tf
 import numpy as np
@@ -27,7 +27,7 @@ from util_functions import load_dataset, SEED, feature_list, count_packets_in_da
 os.environ['PYTHONHASHSEED']=str(SEED)
 np.random.seed(SEED)
 rn.seed(SEED)
-config = tf.ConfigProto(inter_op_parallelism_threads=1)
+config = tf.compat.v1.ConfigProto(inter_op_parallelism_threads=1)
 
 import sys
 import time
@@ -35,22 +35,20 @@ import getopt
 import argparse
 import glob
 from itertools import cycle
-from keras.optimizers import Adam,SGD
-from keras.layers import Input, Dense, Activation, ZeroPadding2D, BatchNormalization, Flatten, Conv2D, Conv1D, LSTM, Reshape
-from keras.layers import AveragePooling2D, MaxPooling2D, Dropout, GlobalMaxPooling2D, GlobalAveragePooling2D
-from keras.models import Model, Sequential, save_model, load_model, clone_model
+from tensorflow.keras.optimizers import Adam,SGD
+from tensorflow.keras.layers import Input, Dense, Activation, ZeroPadding2D, BatchNormalization, Flatten, Conv2D, Conv1D, LSTM, Reshape
+from tensorflow.keras.layers import AveragePooling2D, MaxPooling2D, Dropout, GlobalMaxPooling2D, GlobalAveragePooling2D
+from tensorflow.keras.models import Model, Sequential, save_model, load_model, clone_model
 from sklearn.metrics import classification_report, f1_score, precision_score, recall_score, roc_auc_score,accuracy_score,mean_squared_error, log_loss, confusion_matrix
 from sklearn.utils import shuffle
 
 
-import keras.backend as K
-tf.set_random_seed(SEED)
+import tensorflow.keras.backend as K
+tf.random.set_seed(SEED)
 K.set_image_data_format('channels_last')
-tf.logging.set_verbosity(tf.logging.ERROR)
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
 #config.log_device_placement = True  # to log device placement (on which device the operation ran)
-tf_sess = tf.Session(config=config)
-K.set_session(tf_sess)
 
 MODEL_NAME_LEN = 10
 TRAINING_STATS_HEADER = "Model     TIME(t) ACC(t)  ERR(t)  ACC(v)  ERR(v)  Parameters\n"
@@ -65,10 +63,9 @@ KERNELS = [1,2,4,8,16,32,64]
 def Conv2DModel(model_name, input_shape,kernels,kernel_rows,kernel_col,pool_height='max'):
     K.clear_session()
 
-    model = Sequential()
-    model.name = model_name
+    model = Sequential(name=model_name)
     model.add(Conv2D(kernels, (kernel_rows,kernel_col), strides=(1, 1), input_shape=input_shape, activation='relu', name='conv0'))
-    current_shape = model.get_output_shape_at(0)
+    current_shape = model.layers[0].output_shape
     current_rows = current_shape[1]
     current_cols = current_shape[2]
     current_channels = current_shape[3]
@@ -99,9 +96,9 @@ def trainingEpoch(model, batch_size, parameters, X_train,Y_train,X_val,Y_val, ou
     history = model.fit(x=X_train, y=Y_train, validation_data=(X_val, Y_val), epochs=1, batch_size=batch_size, verbose=2, callbacks=[])  # TODO: verify which callbacks can be useful here (https://keras.io/callbacks/)
     tt1 = time.time()
 
-    accuracy_train = history.history['acc'][0]
+    accuracy_train = history.history['accuracy'][0]
     loss_train = history.history['loss'][0]
-    accuracy_val = history.history['val_acc'][0]
+    accuracy_val = history.history['val_accuracy'][0]
     loss_val = history.history['val_loss'][0]
 
     model_name_string = model.name.ljust(MODEL_NAME_LEN)

@@ -10,9 +10,9 @@ R. Doriguzzi-Corin, S. Millar, S. Scott-Hayward, J. Martínez-del-Rincón and D.
 
 ## Installation
 
-LUCID's CNN is implemented in Python v3.6 using the Keras API v2.2.4 on top of Tensorflow, while the traffic pre-processing tool is implemented in Python v3.6, Numpy and Pyshark. 
+The current LUCID's CNN is implemented in Python v3.8 with Keras and Tensorflow 2, while the traffic pre-processing tool is implemented in Python v3.8, Numpy and Pyshark. The original version, implemented with Tensorflow 1.13.1 and evaluated in the aforementioned paper, is available in branch *lucid-tensorflow-1.13.1*.
 
-This requires the installation of a number of Python tools and libraries. This can be done by using the ```conda``` software environment (https://docs.conda.io/projects/conda/en/latest/).
+Using LUCID requires the installation of a number of Python tools and libraries. This can be done by using the ```conda``` software environment (https://docs.conda.io/projects/conda/en/latest/).
 We suggest the installation of ```miniconda```, a light version of ```conda```. ```miniconda``` is available for MS Windows, MacOSX and Linux and can be installed by following the guidelines available at https://docs.conda.io/en/latest/miniconda.html#. 
 
 In a Linux OS, execute the following command and follows the on-screen instructions:
@@ -21,10 +21,10 @@ In a Linux OS, execute the following command and follows the on-screen instructi
 bash Miniconda3-latest-Linux-x86_64.sh
 ```
 
-Then create a new ```conda``` environment (called ```myenv```) based on Python 3.6 and including part the required packages:
+Then create a new ```conda``` environment (called ```myenv```) based on Python 3.8 and including part the required packages:
 
 ```
-conda create -n myenv python=3.6 numpy keras=2.2.4 tensorflow=1.13.1 h5py lxml
+conda create -n myenv python=3.8 numpy tensorflow=2.3.0 h5py lxml
 ```
 
 Activate the new ```myenv``` environment:
@@ -39,7 +39,7 @@ And finalise the installation with a few more packages:
 (myenv)$ pip3 install pyshark sklearn
 ```
 
-Please note that Pyshark is just a Python wrapper for tshark that allows packet parsing through wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS use  the following command:
+Please note that Pyshark is just Python wrapper for tshark, allowing python packet parsing using wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS use  the following command:
 
 ```
 sudo apt install tshark
@@ -84,7 +84,7 @@ The traffic pre-processing operation comprises two steps. The first parses the f
 This first step can be executed with command:
 
 ```
-python3.6 lucid-dataset-parser.py --dataset_type SYN2020 --dataset_folder ./sample-dataset/ --packets_per_flow 10 --dataset_id SYN2020 --traffic_type all --time_window 10
+python3 lucid-dataset-parser.py --dataset_type SYN2020 --dataset_folder ./sample-dataset/ --packets_per_flow 10 --dataset_id SYN2020 --traffic_type all --time_window 10
 ```
 
 This will process in parallel the two files, producing a file named ```10t-10n-SYN2020-preprocess.data```. In general, the script loads all the ```pcap``` files contained in the folder indicated with option ```--dataset_folder``` and starting with prefix ```dataset-chunk-```. The files are processed in parallel to minimise the execution time.
@@ -102,7 +102,7 @@ Finally, three files (training, validation and test sets) are saved in *hierarch
 The second step is executed with command:
 
 ```
-python3.6 lucid-dataset-parser.py --preprocess_folder ./sample-dataset/
+python3 lucid-dataset-parser.py --preprocess_folder ./sample-dataset/
 ```
 
 If the option ```--output_folder``` is not used,  the output will be produced in the input folder specified with option ```--preprocess_folder```.
@@ -149,7 +149,7 @@ To execute the training process, the following parameters can be specified when 
 To train LUCID, execute the following command:
 
 ```
-python3.6 lucid-cnn.py --train ./sample-dataset/  --epochs 100
+python3 lucid-cnn.py --train ./sample-dataset/  --epochs 100
 ```
 
 This command trains LUCID over the grid of hyperparameters, 100 epochs for each point in the grid. The output is saved in a text file in the same folder containing the dataset. In that folder, the model that maximises the F1 score on the validation set is also saved in ```h5``` format, along with a ```csv``` file with the performance of the model.  The name of the two files is the same (except for the extension) and is in the following format:
@@ -159,7 +159,7 @@ This command trains LUCID over the grid of hyperparameters, 100 epochs for each 
 10t-10n-SYN2020-LUCID.csv
 ```
 
-Where the prefix 10t-10n indicates the values of hyperparamters ```time window``` and ```packets/sample``` that produced the best results in terms of F1 score on the validation set. The values of the other hyperparamters are reported in the ```csv``` file:
+Where the prefix 10t-10n indicates the values of hyperparameters ```time window``` and ```packets/sample``` that produced the best results in terms of F1 score on the validation set. The values of the other hyperparameters are reported in the ```csv``` file:
 
 ```
 Model     TIME    ACC     ERR     PRE     REC     F1      AUC     Parameters
@@ -183,7 +183,7 @@ Testing means evaluating a trained model of LUCID with unseen data (data not use
 To test LUCID, run the following command:
 
 ```
-python3.6 lucid-cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5
+python3 lucid-cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5
 ```
 
 The output printed on the terminal and saved in a text file in the folder with the dataset. The output has the following format:
@@ -200,7 +200,7 @@ TN      FP      FN      TP      DatasetName
 
 Where ```TIME``` is the execution time, ```PACKETS``` is the number of packets present in the test set as part of the samples, ```PKT/SEC``` is the number of packet processed in a second (useful in online system to understand the max throughput supported by LUCID on the testing machine), ```SAMPLE/SEC``` is the number of samples processed in a second, ```ERR``` is the total loss on the test set (binary cross entropy),  ```PRE     REC     F1      AUC```  are precision, recall, F1 score and area under the curve respectively, ```TN      FP      FN      TP``` are the true negative, false positive, false negative and true positive rates respectively. 
 
-The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output is formed by multiple lines, one for each test set. 
+The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output is formed by multiple lines, on for each test set. 
 
 ## 
 

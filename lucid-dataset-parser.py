@@ -37,8 +37,8 @@ from util_functions import *
 
 # Sample commands
 # split a pcap file into smaller chunks to leverage multi-core CPUs: tcpdump -r dataset.pcap -w dataset-chunk -C 1000
-# dataset parsing (first step): python3.6 lucid-dataset-parser.py --dataset_type SYN2020 --dataset_folder ./sample-dataset/ --packets_per_flow 10 --dataset_id SYN2020 --traffic_type all --time_window 10
-# dataset parsing (second step): python3.6 lucid-dataset-parser.py --preprocess_folder ./sample-dataset/
+# dataset parsing (first step): python3 lucid-dataset-parser.py --dataset_type SYN2020 --dataset_folder ./sample-dataset/ --packets_per_flow 10 --dataset_id SYN2020 --traffic_type all --time_window 10
+# dataset parsing (second step): python3 lucid-dataset-parser.py --preprocess_folder ./sample-dataset/
 
 DATASET_FILENAME = "dataset-chunk"
 MAX_FLOW_LEN = 100 # number of packets
