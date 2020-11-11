@@ -12,7 +12,7 @@ R. Doriguzzi-Corin, S. Millar, S. Scott-Hayward, J. Martínez-del-Rincón and D.
 
 The current LUCID's CNN is implemented in Python v3.8 with Keras and Tensorflow 2, while the traffic pre-processing tool is implemented in Python v3.8, Numpy and Pyshark. The original version, implemented with Tensorflow 1.13.1 and evaluated in the aforementioned paper, is available in branch *lucid-tensorflow-1.13.1*.
 
-Using LUCID requires the installation of a number of Python tools and libraries. This can be done by using the ```conda``` software environment (https://docs.conda.io/projects/conda/en/latest/).
+LUCID requires the installation of a number of Python tools and libraries. This can be done by using the ```conda``` software environment (https://docs.conda.io/projects/conda/en/latest/).
 We suggest the installation of ```miniconda```, a light version of ```conda```. ```miniconda``` is available for MS Windows, MacOSX and Linux and can be installed by following the guidelines available at https://docs.conda.io/en/latest/miniconda.html#. 
 
 In a Linux OS, execute the following command and follows the on-screen instructions:
