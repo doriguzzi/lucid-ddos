@@ -49,18 +49,16 @@ For the sake of simplicity, we omit the command prompt ```(myenv)$``` in the fol
 
 ## Traffic pre-processing
 
-LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid-dataset-parser.py``` Python script. It currently supports three DDoS datasets from the University of New Brunswick (https://www.unb.ca/cic/datasets/index.html): ISCXIDS2012, CIC-IDS2017 and CSE-CIC-IDS2018, plus a custom dataset containing a SYN Flood DDoS attack that will be used for this guide and included in the ```sample-dataset``` folder.
+LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid-dataset-parser.py``` Python script. It currently supports three DDoS datasets from the University of New Brunswick (UNB) (https://www.unb.ca/cic/datasets/index.html): ISCXIDS2012, CIC-IDS2017 and CSE-CIC-IDS2018, plus a custom dataset containing a SYN Flood DDoS attack that will be used for this guide and included in the ```sample-dataset``` folder.
 
-With term *support*, we mean the capability of the script to correctly parse the file with the labels, as this file is used during the pre-processing step to label the packets and traffic flows inside the traffic traces. Sometime this file is not needed, as the documentation of the dataset clearly defines  IP address(es) of the attacker(s) and IP address(es) of the victim(s), therefore the labelling of packets can be done without the file of the label. However, also in the latter case, the script must be tuned with the correct information of the traffic (all the attacker/victim pairs of IP addresses). Of course, this information is very specific to the dataset and to the methodology used to generate the traffic. The script can be easily extended to support other datasets.
+With term *support*, we mean the capability of the script to correctly label the packets and the traffic flows inside the traffic traces as benign or DDoS. In general, this is done by parsing a file with the labels provided with the traffic traces, as in the case of the UNB datasets, or by manually indicating the  IP address(es) of the attacker(s) and the IP address(es) of the victim(s) in the code. Of course, also in the latter case, the script must be tuned with the correct information of the traffic (all the attacker/victim pairs of IP addresses), as this information is very specific to the dataset and to the methodology used to generate the traffic. 
 
-In  the current version of ```lucid-dataset-parser.py```, only the dataset  ISCXIDS2012 needs the file with the labels (which can be obtained from the UNB's repository), while for all the others mentioned above we have already included the structures with the pairs attacker/victim. For the custom SYN Flood attack, the structure is the following:   
+Said that, ```lucid-dataset-parser.py``` implements both approaches, therefore it can be easily extended to support other datasets by replicating the available code. In  the current version, only the dataset  ISCXIDS2012 needs the file with the labels (which can be obtained from the UNB's repository), while for all the others mentioned above we have already included the structures with the pairs attacker/victim. For instance, the following Python dictionary provides the IP addresses of the 254 attackers and the victim involved in the custom SYN Flood attack:   
 
 ```
 CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
                       'victims': ['10.42.0.2']}
 ```
-
-which defines 254 attackers and one victim.
 
 ### Command options
 
