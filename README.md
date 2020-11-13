@@ -139,18 +139,20 @@ All these files can be stored into a single folder, or in multiple  subfolders. 
 
 To execute the training process, the following parameters can be specified when using ```lucid-cnn.py```:
 
-- ```-t```, ```--train```: Start the training process and specifies the folder with the dataset
-- ```-e```, ```--epochs ```: Maximum number of training epochs for each set of hyperparameters. This option overrides the *early stopping* mechanism based on the loss trend described above.
+- ```-t```, ```--train```: Starts the training process and specifies the folder with the dataset
+- ```-e```, ```--epochs ```: Maximum number of training epochs for each set of hyperparameters. This option overrides the *early stopping* mechanism based on the loss trend described above
+- ```-r```, ```--regularization ```: Applies either *l1* or *l2* regularization to the convolutional layer's connection weights
+- ```-d```, ```--dropout ```: Applies *dropout* regularization to the convolutional layer's neurons.
 
 ### The training process
 
 To train LUCID, execute the following command:
 
 ```
-python3 lucid-cnn.py --train ./sample-dataset/  --epochs 100
+python3 lucid-cnn.py --train ./sample-dataset/  --epochs 100 --regularization l2 --dropout 0.5
 ```
 
-This command trains LUCID over the grid of hyperparameters, 100 epochs for each point in the grid. The output is saved in a text file in the same folder containing the dataset. In that folder, the model that maximises the F1 score on the validation set is also saved in ```h5``` format, along with a ```csv``` file with the performance of the model.  The name of the two files is the same (except for the extension) and is in the following format:
+This command trains LUCID over the grid of hyperparameters, 100 epochs for each point in the grid. During the training, *l2* and *dropout* regularization methods are used, the latter with *dropout rate* equal to 50%. The output is saved in a text file in the same folder containing the dataset. In that folder, the model that maximises the F1 score on the validation set is also saved in ```h5``` format, along with a ```csv``` file with the performance of the model.  The name of the two files is the same (except for the extension) and is in the following format:
 
 ```
 10t-10n-SYN2020-LUCID.h5

@@ -40,7 +40,6 @@ from util_functions import *
 # dataset parsing (first step): python3 lucid-dataset-parser.py --dataset_type SYN2020 --dataset_folder ./sample-dataset/ --packets_per_flow 10 --dataset_id SYN2020 --traffic_type all --time_window 10
 # dataset parsing (second step): python3 lucid-dataset-parser.py --preprocess_folder ./sample-dataset/
 
-DATASET_FILENAME = "dataset-chunk"
 MAX_FLOW_LEN = 100 # number of packets
 TIME_WINDOW = 10
 TRAIN_SIZE = 0.90 # size of the training set wrt the total number of samples
@@ -57,6 +56,13 @@ IDS2017_DDOS_FLOWS = {'attackers': ['172.16.0.1'],
 
 CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
                       'victims': ['10.42.0.2']}
+
+DDOS_ATTACK_SPECS = {
+    'IDS2017' : IDS2017_DDOS_FLOWS,
+    'IDS2018' : IDS2018_DDOS_FLOWS,
+    'SYN2020' : CUSTOM_DDOS_SYN
+}
+
 
 vector_proto = CountVectorizer()
 vector_proto.fit_transform(protocols).todense()
@@ -123,35 +129,9 @@ def parse_labels(dataset_type, label_folder):
                 if key_bwd not in output_dict:
                     output_dict[key_bwd] = labels[child.find('Tag').text]
 
-    elif dataset_type == 'IDS2017':
-        for attacker in IDS2017_DDOS_FLOWS['attackers']:
-            for victim in IDS2017_DDOS_FLOWS['victims']:
-                ip_src = str(attacker)
-                ip_dst = str(victim)
-                key_fwd = (ip_src, ip_dst)
-                key_bwd = (ip_dst, ip_src)
-
-                if key_fwd not in output_dict:
-                    output_dict[key_fwd] = 1
-                if key_bwd not in output_dict:
-                    output_dict[key_bwd] = 1
-
-    elif dataset_type == 'IDS2018':
-        for attacker in IDS2018_DDOS_FLOWS['attackers']:
-            for victim in IDS2018_DDOS_FLOWS['victims']:
-                ip_src = str(attacker)
-                ip_dst = str(victim)
-                key_fwd = (ip_src, ip_dst)
-                key_bwd = (ip_dst, ip_src)
-
-                if key_fwd not in output_dict:
-                    output_dict[key_fwd] = 1
-                if key_bwd not in output_dict:
-                    output_dict[key_bwd] = 1
-
-    elif dataset_type == 'SYN2020':
-        for attacker in CUSTOM_DDOS_SYN['attackers']:
-            for victim in CUSTOM_DDOS_SYN['victims']:
+    elif dataset_type  in DDOS_ATTACK_SPECS:
+        for attacker in DDOS_ATTACK_SPECS[dataset_type]['attackers']:
+            for victim in DDOS_ATTACK_SPECS[dataset_type]['victims']:
                 ip_src = str(attacker)
                 ip_dst = str(victim)
                 key_fwd = (ip_src, ip_dst)
@@ -246,7 +226,7 @@ def process_pcap(pcap_file,dataset_type,in_labels,max_flow_len,out_flows,traffic
                     temp_dict[pf.id_bwd][start_time_window] = np.array([pf.features_list])
 
     for five_tuple,flow in temp_dict.items():
-        if dataset_type in ['IDS2017', 'IDS2018','SYN2020']:
+        if dataset_type in DDOS_ATTACK_SPECS:
             short_key = (five_tuple[0], five_tuple[2])  # for IDS2017/IDS2018 dataset the labels have shorter keys
             flow['label'] = in_labels.get(short_key, 0)
         elif dataset_type in ['IDS2012']:
@@ -446,7 +426,7 @@ def main(argv):
         else:
             output_folder = args.dataset_folder[0]
 
-        filelist = glob.glob(args.dataset_folder[0]+ '/' + DATASET_FILENAME + "*")
+        filelist = glob.glob(args.dataset_folder[0]+ '/*.pcap')
         in_labels = parse_labels(args.dataset_type[0],args.dataset_folder[0])
 
         start_time = time.time()

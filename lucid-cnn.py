@@ -22,7 +22,7 @@ import tensorflow as tf
 import numpy as np
 import random as rn
 import os
-from util_functions import load_dataset, SEED, feature_list, count_packets_in_dataset
+from util_functions import *
 # Seed Random Numbers
 os.environ['PYTHONHASHSEED']=str(SEED)
 np.random.seed(SEED)
@@ -35,6 +35,7 @@ import getopt
 import argparse
 import glob
 from itertools import cycle
+from tensorflow.keras import regularizers
 from tensorflow.keras.optimizers import Adam,SGD
 from tensorflow.keras.layers import Input, Dense, Activation, ZeroPadding2D, BatchNormalization, Flatten, Conv2D, Conv1D, LSTM, Reshape
 from tensorflow.keras.layers import AveragePooling2D, MaxPooling2D, Dropout, GlobalMaxPooling2D, GlobalAveragePooling2D
@@ -60,11 +61,19 @@ LR = [0.1,0.01,0.001]
 BATCH_SIZE = [1024,2048]
 KERNELS = [1,2,4,8,16,32,64]
 
-def Conv2DModel(model_name, input_shape,kernels,kernel_rows,kernel_col,pool_height='max'):
+def Conv2DModel(model_name, input_shape,kernels,kernel_rows,kernel_col,pool_height='max', regularization=None,dropout=None):
     K.clear_session()
 
     model = Sequential(name=model_name)
-    model.add(Conv2D(kernels, (kernel_rows,kernel_col), strides=(1, 1), input_shape=input_shape, activation='relu', name='conv0'))
+    if regularization == 'l1' or regularization == "l2":
+        regularizer = regularization
+    else:
+        regularizer = None
+
+    model.add(Conv2D(kernels, (kernel_rows,kernel_col), strides=(1, 1), input_shape=input_shape, kernel_regularizer=regularizer, name='conv0'))
+    if dropout != None and type(dropout) == float:
+        model.add(Dropout(dropout))
+    model.add(Activation('relu'))
     current_shape = model.layers[0].output_shape
     current_rows = current_shape[1]
     current_cols = current_shape[2]
@@ -115,7 +124,7 @@ def trainingEpoch(model, batch_size, parameters, X_train,Y_train,X_val,Y_val, ou
 
     return loss_val, accuracy_val
 
-def trainCNNModels(model_name, epochs, X_train, Y_train,X_val, Y_val, dataset_folder, dataset_name, time_window, max_flow_len):
+def trainCNNModels(model_name, epochs, X_train, Y_train,X_val, Y_val, dataset_folder, dataset_name, time_window, max_flow_len,regularization=None, dropout=None):
 
     packets = X_train.shape[1]
     features = X_train.shape[2]
@@ -140,7 +149,7 @@ def trainCNNModels(model_name, epochs, X_train, Y_train,X_val, Y_val, dataset_fo
                             min_loss = float('inf')
                             max_acc_val = 0
                             parameters = "lr=" + '{:04.3f}'.format(lr) + ",b=" + '{:04d}'.format(batch_size) + ",n=" + '{:03d}'.format(max_flow_len) + ",t=" + '{:03d}'.format(time_window) + ",k=" + '{:03d}'.format(kernels) + ",h=(" + '{:02d}'.format(kernel_rows) + "," + '{:02d}'.format(kernel_columns) + "),m=" + pool_height
-                            model = Conv2DModel(model_name, X_train.shape[1:4], kernels, kernel_rows, kernel_columns,pool_height)
+                            model = Conv2DModel(model_name, X_train.shape[1:4], kernels, kernel_rows, kernel_columns,pool_height,regularization,dropout)
                             compileModel(model,lr)
                             best_model = None
                             best_model_loss_val = float('inf')
@@ -228,6 +237,12 @@ def main(argv):
     parser.add_argument('-m', '--model', nargs='+', type=str,
                         help='File containing the model')
 
+    parser.add_argument('-r', '--regularization', nargs='?', type=str, default=None,
+                        help='Apply a regularization technique (l1,l2)')
+
+    parser.add_argument('-d', '--dropout', nargs='?', type=float, default=None,
+                        help='Apply dropout to the convolutional layer')
+
 
     args = parser.parse_args()
 
@@ -256,7 +271,7 @@ def main(argv):
 
             print ("\nCurrent dataset folder: ", dataset_folder)
 
-            trainCNNModels("LUCID", args.epochs,X_train,Y_train,X_val,Y_val,dataset_folder, dataset_name, time_window, max_flow_len)
+            trainCNNModels("LUCID", args.epochs,X_train,Y_train,X_val,Y_val,dataset_folder, dataset_name, time_window, max_flow_len, args.regularization, args.dropout)
 
 
     if args.predict is not None:
@@ -307,13 +322,13 @@ def main(argv):
                             X = np.squeeze(X)
 
                         Y_pred = None
-                        Y_true = None
+                        Y_true = Y.reshape((Y.shape[0], 1))
+                        singleY = all_same(Y_true) # check whether there is only one label in test set
                         avg_time = 0
                         for iteration in range(iterations):
                             pt0 = time.time()
                             Y_pred = (model.predict(X,batch_size=2048) > 0.5)
                             pt1 = time.time()
-                            Y_true = Y.reshape((Y.shape[0], 1))
                             avg_time += pt1 - pt0
 
                         avg_time = avg_time/iterations
@@ -321,11 +336,11 @@ def main(argv):
                         performance_string = '{:010.0f}'.format(packets) + " " + '{:010.0f}'.format(packets/(avg_time)) + " " + '{:010.0f}'.format(X.shape[0]/(avg_time)) + " "
 
                         accuracy = accuracy_score(Y_true, Y_pred)
-                        loss = log_loss(Y_true, Y_pred)
+                        loss = 0 if singleY else log_loss(Y_true, Y_pred)
                         precision = precision_score(Y_true, Y_pred)
                         recall = recall_score(Y_true, Y_pred)
                         f1 = f1_score(Y_true,Y_pred)
-                        auc = roc_auc_score(Y_true, Y_pred)
+                        auc = 0 if singleY else roc_auc_score(Y_true, Y_pred)
                         tn, fp, fn, tp = confusion_matrix(Y_true, Y_pred).ravel()
 
                         test_string_pre = '{:06.5f}'.format(accuracy) + \
