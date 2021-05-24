@@ -21,39 +21,41 @@ In a Linux OS, execute the following command and follows the on-screen instructi
 bash Miniconda3-latest-Linux-x86_64.sh
 ```
 
-Then create a new ```conda``` environment (called ```myenv```) based on Python 3.8 and including part the required packages:
+Then create a new ```conda``` environment (called ```python38```) based on Python 3.8 and including part the required packages:
 
 ```
-conda create -n myenv python=3.8 numpy tensorflow=2.3.0 h5py lxml
+conda create -n python38 python=3.8 numpy tensorflow=2.3.0 h5py lxml
 ```
 
-Activate the new ```myenv``` environment:
+Activate the new ```python38``` environment:
 
 ```
-conda activate myenv
+conda activate python38
 ```
 
 And finalise the installation with a few more packages:
 
 ```
-(myenv)$ pip3 install pyshark sklearn
+(python38)$ pip3 install pyshark sklearn
 ```
 
-Please note that Pyshark is just Python wrapper for tshark, allowing python packet parsing using wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS use  the following command:
+Pyshark is just Python wrapper for tshark, allowing python packet parsing using wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS, use the following command:
 
 ```
 sudo apt install tshark
 ```
 
-For the sake of simplicity, we omit the command prompt ```(myenv)$``` in the following example commands in this README.   ```(myenv)$``` indicates that we are working inside the ```myenv``` execution environment, which provides all the required libraries and tools. If the command prompt is not visible, re-activate the environment as explained above.
+Please note that the current LUCID code works with ```tshark``` **version 3.2.13 or lower**. Issues have been reported when using newest releases such as 3.4.X.
+
+For the sake of simplicity, we omit the command prompt ```(python38)$``` in the following example commands in this README.   ```(python38)$``` indicates that we are working inside the ```python38``` execution environment, which provides all the required libraries and tools. If the command prompt is not visible, re-activate the environment as explained above.
 
 ## Traffic pre-processing
 
-LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid-dataset-parser.py``` Python script. It currently supports three DDoS datasets from the University of New Brunswick (UNB) (https://www.unb.ca/cic/datasets/index.html): ISCXIDS2012, CIC-IDS2017 and CSE-CIC-IDS2018, plus a custom dataset containing a SYN Flood DDoS attack that will be used for this guide and included in the ```sample-dataset``` folder.
+LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid-dataset-parser.py``` Python script. It currently supports two DDoS datasets from the University of New Brunswick (UNB) (https://www.unb.ca/cic/datasets/index.html): CIC-IDS2017 and CSE-CIC-IDS2018, plus a custom dataset containing a SYN Flood DDoS attack that will be used for this guide and included in the ```sample-dataset``` folder.
 
-With term *support*, we mean the capability of the script to correctly label the packets and the traffic flows either as benign or DDoS. In general, this is done by parsing a file with the labels provided with the traffic traces, like in the case of the UNB datasets, or by manually indicating the  IP address(es) of the attacker(s) and the IP address(es) of the victim(s) in the code. Of course, also in the latter case, the script must be tuned with the correct information of the traffic (all the attacker/victim pairs of IP addresses), as this information is very specific to the dataset and to the methodology used to generate the traffic. 
+With term *support*, we mean the capability of the script to correctly label the packets and the traffic flows either as benign or DDoS. In general, this is done by parsing a file with the labels provided with the traffic traces, like in the case of the UNB datasets, or by manually indicating the IP address(es) of the attacker(s) and the IP address(es) of the victim(s) in the code. Of course, also in the latter case, the script must be tuned with the correct information of the traffic (all the attacker/victim pairs of IP addresses), as this information is very specific to the dataset and to the methodology used to generate the traffic. 
 
-Said that, ```lucid-dataset-parser.py``` implements both approaches, therefore it can be easily extended to support other datasets by replicating the available code. In  the current version, only the dataset  ISCXIDS2012 needs the file with the labels (which can be obtained from the UNB's repository), while for all the others mentioned above we have already included the structures with the pairs attacker/victim. For instance, the following Python dictionary provides the IP addresses of the 254 attackers and the victim involved in the custom SYN Flood attack:   
+Said that, ```lucid-dataset-parser.py``` implements both approaches, therefore it can be easily extended to support other datasets by replicating the available code. In the current version, only the dataset  ISCXIDS2012 needs the file with the labels (which can be obtained from the UNB's repository), while for all the others mentioned above we have already included the structures with the pairs attacker/victim. For instance, the following Python dictionary provides the IP addresses of the 254 attackers and the victim involved in the custom SYN Flood attack:   
 
 ```
 CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
@@ -68,7 +70,7 @@ The following parameters can be specified when using ```lucid-dataset-parser.py`
 - ```-o```, ```--output_folder ```: Folder where  the scripts saves the output. The dataset folder is used when this option is not used
 - ```-f```, ```--traffic_type ```: Type of flow to process (all, benign, ddos)
 - ```-p```, ```--preprocess_folder ```: Folder containing the intermediate files ```*.data```
-- ```-t```, ```--dataset_type ```: Type of the dataset. Available options are: IDS2012, IDS2017, IDS2018, SYN2020
+- ```-t```, ```--dataset_type ```: Type of the dataset. Available options are: IDS2017, IDS2018, SYN2020
 - ```-n```, ```--packets_per_flow ```: Maximum number of packets in a sample
 - ```-w```, ```--time_window ```: Length of the time window (in seconds)
 - ```-i```, ```--dataset_id ```: String to append to the names of output files
@@ -77,12 +79,12 @@ The following parameters can be specified when using ```lucid-dataset-parser.py`
 
 ### First step
 
-The traffic pre-processing operation comprises two steps. The first parses the file with the labels (if needed) all extracts the features from the packets of all the ```pcap``` files contained in the source directory. The features are grouped in flows, where a flow is a set of features from packets with the same source IP, source UDP/TCP port, destination IP and destination UDP/TCP port and protocol. Flows are bi-directional, therefore, packet (srcIP,srcPort,dstIP,dstPort,proto) belongs to the same flow of (dstIP,dstPort,srcIP,srcPort,proto). The result, is a set of intermediate binary files with extension ```.data```.
+The traffic pre-processing operation comprises two steps. The first parses the file with the labels (if needed) all extracts the features from the packets of all the ```pcap``` files contained in the source directory. The features are grouped in flows, where a flow is a set of features from packets with the same source IP, source UDP/TCP port, destination IP and destination UDP/TCP port and protocol. Flows are bi-directional, therefore, packet (srcIP,srcPort,dstIP,dstPort,proto) belongs to the same flow of (dstIP,dstPort,srcIP,srcPort,proto). The result is a set of intermediate binary files with extension ```.data```.
 
 This first step can be executed with command:
 
 ```
-python3 lucid-dataset-parser.py --dataset_type SYN2020 --dataset_folder ./sample-dataset/ --packets_per_flow 10 --dataset_id SYN2020 --traffic_type all --time_window 10
+python3 lucid_dataset_parser.py --dataset_type SYN2020 --dataset_folder ./sample-dataset/ --packets_per_flow 10 --dataset_id SYN2020 --traffic_type all --time_window 10
 ```
 
 This will process in parallel the two files, producing a file named ```10t-10n-SYN2020-preprocess.data```. In general, the script loads all the ```pcap``` files contained in the folder indicated with option ```--dataset_folder``` and starting with prefix ```dataset-chunk-```. The files are processed in parallel to minimise the execution time.
@@ -100,10 +102,10 @@ Finally, three files (training, validation and test sets) are saved in *hierarch
 The second step is executed with command:
 
 ```
-python3 lucid-dataset-parser.py --preprocess_folder ./sample-dataset/
+python3 lucid_dataset_parser.py --preprocess_folder ./sample-dataset/
 ```
 
-If the option ```--output_folder``` is not used,  the output will be produced in the input folder specified with option ```--preprocess_folder```.
+If the option ```--output_folder``` is not used, the output will be produced in the input folder specified with option ```--preprocess_folder```.
 
 At the end of this operation, the script prints a summary of the pre-processed dataset. In our case, with this tiny traffic traces, the result should be something like:
 
@@ -117,9 +119,9 @@ All the output of the ```lucid-dataset-parser.py``` script is saved within the o
 
 ## Training
 
-The LUCID CNN  is implemented in script ```lucid-cnn.py```. The script executes a grid search throughout a set of hyperparameters and saves the model that maximises the F1 score metric in ```h5``` format (hierarchical data format).
+The LUCID CNN is implemented in script ```lucid-cnn.py```. The script executes a grid search throughout a set of hyperparameters and saves the model that maximises the F1 score metric in ```h5``` format (hierarchical data format).
 
-At each point in the grid (each combination of hyperparameters), the training continues indefinitely and stops when the loss does not decrease for a consecutive 25 times. This value is defined with variable ```MAX_CONSECUTIVE_LOSS_INCREASE=25``` at the beginning of the script. Part of the hyperparameters are defined in the script as follows:
+At each point in the grid (each combination of hyperparameters), the training continues indefinitely and stops when the loss does not decrease for a consecutive 25 times. This value is defined with variable ```MAX_CONSECUTIVE_LOSS_INCREASE=25``` at the beginning of the script. Part of the hyperparameters is defined in the script as follows:
 
 - **Learning rate**:  ```LR = [0.1,0.01,0.001]```
 - **Batch size**: ```BATCH_SIZE = [1024,2048]```
@@ -149,7 +151,7 @@ To execute the training process, the following parameters can be specified when 
 To train LUCID, execute the following command:
 
 ```
-python3 lucid-cnn.py --train ./sample-dataset/  --epochs 100 --regularization l2 --dropout 0.5
+python3 lucid_cnn.py --train ./sample-dataset/  --epochs 100 --regularization l2 --dropout 0.5
 ```
 
 This command trains LUCID over the grid of hyperparameters, 100 epochs for each point in the grid. During the training, *l2* and *dropout* regularization methods are used, the latter with *dropout rate* equal to 50%. The output is saved in a text file in the same folder containing the dataset. In that folder, the model that maximises the F1 score on the validation set is also saved in ```h5``` format, along with a ```csv``` file with the performance of the model.  The name of the two files is the same (except for the extension) and is in the following format:
@@ -162,15 +164,13 @@ This command trains LUCID over the grid of hyperparameters, 100 epochs for each 
 Where the prefix 10t-10n indicates the values of hyperparameters ```time window``` and ```packets/sample``` that produced the best results in terms of F1 score on the validation set. The values of the other hyperparameters are reported in the ```csv``` file:
 
 ```
-Model     TIME    ACC     ERR     PRE     REC     F1      AUC     Parameters
-LUCID     000.040 1.00000 0.08495 1.00000 1.00000 1.00000 1.00000 lr=0.100,b=2048,n=010,t=010,k=001,h=(03,11),m=min
+Model         TIME(sec) ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Parameters
+SYN2020-LUCID     0.078 1.0000 0.2634 1.0000 1.0000 1.0000 0.0000 1.0000 0.0000 lr=0.100,b=1024,n=010,t=010,k=001,h=(03,11),m=min
 ```
 
-along with prediction results obtained on the validation set, such as execution time (TIME), accuracy (ACC), loss (ERR), precision (PRE), recall (REC), F1 score and area under the curve (AUC).
+along with prediction results obtained on the validation set, such as execution time (TIME), accuracy (ACC), loss (ERR), F1 score (F1), positive predictive value or precision (PPV), true positive rate (TPR), false positive rate (FPR), true negative rate (TNR) and false negative rate (FNR).
 
 The hyperparameters are learning rate (lr), batch size (b), packet/sample (n), time window (t), number of convolutional filters (k), filter size (h), max pooling size (m).
-
- 
 
 ## Testing
 
@@ -178,31 +178,82 @@ Testing means evaluating a trained model of LUCID with unseen data (data not use
 
 - ```-p```, ```--predict```: Perform prediction on the test sets contained in a given folder specified with this option. The folder must contain files in ```hdf5``` format with the ```test``` suffix
 - ```-m```, ```--model```: Model to be used for the prediction. The model in ```h5``` format produced with the training
-- ```-i```, ```--iteration```: Repetitions of the prediction process (useful to estimate the average prediction time)
+- ```-i```, ```--iterations```: Repetitions of the prediction process (useful to estimate the average prediction time)
 
 To test LUCID, run the following command:
 
 ```
-python3 lucid-cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5
+python3 lucid_cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5
 ```
 
 The output printed on the terminal and saved in a text file in the folder with the dataset. The output has the following format:
 
 ```
-Model         TIME    PACKETS    PKT/SEC    SAMPLE/SEC ACC     ERR      PRE     REC     F1      AUC     
-SYN2020-LUCID 000.002 0000001761 0001122689 0000224410 0.99148 00.29437 0.98305 1.00000 0.99145 0.99157 
+Model         TIME(sec) PACKETS SAMPLES DDOS% ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Data Source
+SYN2020-LUCID     0.036 0001761 0000352 0.503 0.9915 0.2944 0.9915 0.9831 1.0000 0.0169 0.9831 0.0000 10t-10n-SYN2020-dataset-test.hdf5
 ```
 
-```
-TN      FP      FN      TP      DatasetName
-0.98315 0.01685 0.00000 1.00000 10t-10n-SYN2020-dataset-test.hdf5
-```
-
-Where ```TIME``` is the execution time, ```PACKETS``` is the number of packets present in the test set as part of the samples, ```PKT/SEC``` is the number of packet processed in a second (useful in online system to understand the max throughput supported by LUCID on the testing machine), ```SAMPLE/SEC``` is the number of samples processed in a second, ```ERR``` is the total loss on the test set (binary cross entropy),  ```PRE     REC     F1      AUC```  are precision, recall, F1 score and area under the curve respectively, ```TN      FP      FN      TP``` are the true negative, false positive, false negative and true positive rates respectively. 
+Where ```TIME``` is the execution time on a test set.  The values of ```PACKETS``` and ```SAMPLES``` are the the total number of packets and samples in the test set respectively. More precisely, ```PACKETS``` is the total amount of packets represented in the samples (traffic flows) of the test set. ```ERR``` is the total loss on the test set (binary cross entropy),  ```ACC```, ```F1```, ```PPV```  are classification accuracy, F1 and precision scores respectively, ```TPR```, ```FPR```, ```TNR```, ```FNR``` are the true positive, false positive, true negative and false negative rates respectively. 
 
 The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output is formed by multiple lines, on for each test set. 
 
-## 
+## Online Inference
+
+Once trained, a LUCID model can be used to perform inference on live network traffic or on pre-recorded traffic traces saved in ```pcap``` format. This operational mode is implemented in the ```lucid_cnn.py``` script and leverages on ```pyshark``` and ```tshark``` tools to capture the network packets from one of the network cards of the machine where the script is executed, or to extract the packets from a ```pcap``` file. In both cases, the script simulates an online deployment, where the traffic is collected for a predefined amount of time (```time_window```) and then sent to the neural network for classification.
+
+Online inference can be started by executing ```lucid_cnn.py``` followed by one or more of these options: 
+
+- ```-pl```, ```--predict_live```: Perform prediction on the network traffic sniffed from a network card or from a ```pcap``` file available on the file system. Therefore, this option must be followed by either the name of a network interface (e.g., ```eth0```) or the path to a ```pcap``` file (e.g., ```/home/user/traffic_capture.pcap```)
+- ```-m```, ```--model```: Model to be used for the prediction. The model in ```h5``` format produced with the training
+- ```-y```, ```--dataset_type```: One between ```IDS2017``` and ```IDS2018``` in the case of ```pcap``` files from the UNB's datasets, or ```SYN2020``` for the custom dataset provided with this code. This option is not used by LUCID for the classification task, but only to produce the classification statistics (e.g., accuracy, F1 score, etc,) by comparing the ground truth labels with the LUCID's output
+- ```-a```, ```--attack_net```: Specifies the subnet of the attack network (e.g., ```192.168.0.0/24```). Like option ```dataset_type```, this is used to generate the ground truth labels. This option is used, along with option ```victim_net```, in the case of custom traffic or pcap file with IP address schemes different from those in the three datasets ```IDS2017```,  ```IDS2018```  or ```SYN2020``` 
+- ```-y```, ```--victim_net```: The subnet of the victim network (e.g., ```10.42.0.0/24```), specified along with option ```attack_net``` (see description above).
+
+### Inference on live traffic
+
+If the argument of ```predict_live``` option is a network interface, LUCID will sniff the network traffic from that interface and will return the classification results every time the time window expires. The duration of the time window is automatically detected from the prefix of the model's name (e.g., ```10t``` indicates a 10-second time window). To start the inference on live traffic, use the following command:
+
+```
+python3 lucid_cnn.py --predict_live eth0 --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --dataset_type SYN2020
+```
+
+Where ```eth0``` is the name of the network interface, while ```dataset_type``` indicates the address scheme of the traffic. This is optional and, as written above, it is only used to obtain the ground truth labels needed to compute the classification accuracy.
+
+In the example, ```SYN2020``` refers to a SYN flood attack built using the following addressing scheme, defined in ```lucid_dataset_parser.py```, and used in the sample dataset:
+
+```
+CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
+                      'victims': ['10.42.0.2']}
+```
+
+Of course, the above dictionary can be changed to meet the address scheme of the network where the experiments are executed. Alternatively, one can use the ```attack_net``` and ```victim_net``` options as follows:
+
+```
+python3 lucid_cnn.py --predict_live ens3 --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --attack_net 11.0.0.0/24 --victim_net 10.42.0.0/24
+```
+
+Once LUCID has been started on the victim machine using one of the two examples above, we can start the attack from another host machine using one of the following scripts based on the ```mausezahn``` tool (https://github.com/uweber/mausezahn):
+
+```
+sudo mz eth0 -A  11.0.0.0/24 -B 10.42.0.2 -t tcp " dp=80,sp=1024-60000,flags=syn"
+```
+
+In this script, ```eth0``` refers to the egress network interface on the attacker's machine and ```10.42.0.2``` is the IP address of the victim machine.
+
+The output of LUCID on the victim machine will be similar to that reported in Section **Testing** above. 
+
+### Inference on pcap files
+
+Similar to the previous case on live traffic, inference on a pre-recorded traffic trace can be started with command:
+
+```
+python3 lucid_cnn.py --predict_live ./sample-dataset/dataset-chunk-syn.pcap --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --dataset_type SYN2020
+```
+
+In this case, ```predict_live``` must be the path to a pcap file. The script parses the file from the beginning to the end, printing the classification results every time the time window expires. The duration of the time window is automatically detected from the prefix of the model's name (e.g., ```10t``` indicates a 10-second time window). 
+
+The output of LUCID on the victim machine will be similar to that reported in Section **Testing** above. 
+
 
 ## Acknowledgements
 
