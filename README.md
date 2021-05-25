@@ -89,7 +89,7 @@ python3 lucid_dataset_parser.py --dataset_type SYN2020 --dataset_folder ./sample
 
 This will process in parallel the two files, producing a file named ```10t-10n-SYN2020-preprocess.data```. In general, the script loads all the ```pcap``` files contained in the folder indicated with option ```--dataset_folder``` and starting with prefix ```dataset-chunk-```. The files are processed in parallel to minimise the execution time.
 
-Prefix ```10t-10n``` means that the pro-processing has been done using a time window of 10 seconds (10t) and a flow length of 10 packets (10n). Please note that ```SYN2020``` in the filename is the result of option ```--dataset_id SYN2020``` in the command.
+Prefix ```10t-10n``` means that the pre-processing has been done using a time window of 10 seconds (10t) and a flow length of 10 packets (10n). Please note that ```SYN2020``` in the filename is the result of option ```--dataset_id SYN2020``` in the command.
 
 Time window and flow length are two hyperparameters of LUCID. For more information, please refer to the research paper mentioned above. 
 
@@ -105,7 +105,7 @@ The second step is executed with command:
 python3 lucid_dataset_parser.py --preprocess_folder ./sample-dataset/
 ```
 
-If the option ```--output_folder``` is not used, the output will be produced in the input folder specified with option ```--preprocess_folder```.
+If option ```--output_folder``` is not used, the output will be produced in the input folder specified with option ```--preprocess_folder```.
 
 At the end of this operation, the script prints a summary of the pre-processed dataset. In our case, with this tiny traffic traces, the result should be something like:
 
@@ -199,7 +199,7 @@ The last column indicates the name of the test set used for the prediction test.
 
 ## Online Inference
 
-Once trained, a LUCID model can be used to perform inference on live network traffic or on pre-recorded traffic traces saved in ```pcap``` format. This operational mode is implemented in the ```lucid_cnn.py``` script and leverages on ```pyshark``` and ```tshark``` tools to capture the network packets from one of the network cards of the machine where the script is executed, or to extract the packets from a ```pcap``` file. In both cases, the script simulates an online deployment, where the traffic is collected for a predefined amount of time (```time_window```) and then sent to the neural network for classification.
+Once trained, LUCID can perform inference on live network traffic or on pre-recorded traffic traces saved in ```pcap``` format. This operational mode is implemented in the ```lucid_cnn.py``` script and leverages on ```pyshark``` and ```tshark``` tools to capture the network packets from one of the network cards of the machine where the script is executed, or to extract the packets from a ```pcap``` file. In both cases, the script simulates an online deployment, where the traffic is collected for a predefined amount of time (```time_window```) and then sent to the neural network for classification.
 
 Online inference can be started by executing ```lucid_cnn.py``` followed by one or more of these options: 
 
@@ -250,7 +250,7 @@ Similar to the previous case on live traffic, inference on a pre-recorded traffi
 python3 lucid_cnn.py --predict_live ./sample-dataset/dataset-chunk-syn.pcap --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --dataset_type SYN2020
 ```
 
-In this case, ```predict_live``` must be the path to a pcap file. The script parses the file from the beginning to the end, printing the classification results every time the time window expires. The duration of the time window is automatically detected from the prefix of the model's name (e.g., ```10t``` indicates a 10-second time window). 
+In this case, the argument of option ```predict_live``` must be the path to a pcap file. The script parses the file from the beginning to the end, printing the classification results every time the time window expires. The duration of the time window is automatically detected from the prefix of the model's name (e.g., ```10t``` indicates a 10-second time window). 
 
 The output of LUCID on the victim machine will be similar to that reported in Section **Testing** above. 
 
