@@ -117,7 +117,7 @@ At the end of this operation, the script prints a summary of the pre-processed d
 
 Which means 3518 samples in total (1759 benign and 1759 DDoS), 2849 in the training set, 317 in the validation set and 352 in the test set. The output also shows the total number of packets in the dataset divided in training, validation and test sets and the options used with the script. 
 
-All the output of the ```lucid-dataset-parser.py``` script is saved within the output folder in the ```history.log``` file.
+All the output of the ```lucid_dataset_sparser.py``` script is saved within the output folder in the ```history.log``` file.
 
 ## Training
 
@@ -176,7 +176,7 @@ The hyperparameters are learning rate (lr), batch size (b), packet/sample (n), t
 
 ## Testing
 
-Testing means evaluating a trained model of LUCID with unseen data (data not used during the training and validation steps), such as the test set in the ```sample-dataset``` folder. For this process,  the ```lucid-cnn.py``` provides a different set of options:
+Testing means evaluating a trained model of LUCID with unseen data (data not used during the training and validation steps), such as the test set in the ```sample-dataset``` folder. For this process,  the ```lucid_cnn.py``` provides a different set of options:
 
 - ```-p```, ```--predict```: Perform prediction on the test sets contained in a given folder specified with this option. The folder must contain files in ```hdf5``` format with the ```test``` suffix
 - ```-m```, ```--model```: Model to be used for the prediction. The model in ```h5``` format produced with the training
