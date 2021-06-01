@@ -51,11 +51,13 @@ For the sake of simplicity, we omit the command prompt ```(python38)$``` in the 
 
 ## Traffic pre-processing
 
-LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid-dataset-parser.py``` Python script. It currently supports two DDoS datasets from the University of New Brunswick (UNB) (https://www.unb.ca/cic/datasets/index.html): CIC-IDS2017 and CSE-CIC-IDS2018, plus a custom dataset containing a SYN Flood DDoS attack that will be used for this guide and included in the ```sample-dataset``` folder.
+LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid_dataset_parser.py``` Python script. It currently supports two DDoS datasets from the University of New Brunswick (UNB) (https://www.unb.ca/cic/datasets/index.html): CIC-IDS2017 and CSE-CIC-IDS2018, plus a custom dataset containing a SYN Flood DDoS attack (SYN2020) that will be used for this guide and included in the ```sample-dataset``` folder.
 
 With term *support*, we mean the capability of the script to correctly label the packets and the traffic flows either as benign or DDoS. In general, this is done by parsing a file with the labels provided with the traffic traces, like in the case of the UNB datasets, or by manually indicating the IP address(es) of the attacker(s) and the IP address(es) of the victim(s) in the code. Of course, also in the latter case, the script must be tuned with the correct information of the traffic (all the attacker/victim pairs of IP addresses), as this information is very specific to the dataset and to the methodology used to generate the traffic. 
 
-Said that, ```lucid-dataset-parser.py``` implements both approaches, therefore it can be easily extended to support other datasets by replicating the available code. In the current version, only the dataset  ISCXIDS2012 needs the file with the labels (which can be obtained from the UNB's repository), while for all the others mentioned above we have already included the structures with the pairs attacker/victim. For instance, the following Python dictionary provides the IP addresses of the 254 attackers and the victim involved in the custom SYN Flood attack:   
+Said that, ```lucid_dataset_parser.py``` includes the structures with the pairs attacker/victim of the three datasets mentioned above (CIC-IDS2017, CSE-CIC-IDS2018 and SYN2020), but it can be easily extended to support other datasets by replicating the available code.
+
+For instance, the following Python dictionary provides the IP addresses of the 254 attackers and the victim involved in the custom SYN Flood attack:   
 
 ```
 CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
@@ -64,7 +66,7 @@ CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
 
 ### Command options
 
-The following parameters can be specified when using ```lucid-dataset-parser.py```:
+The following parameters can be specified when using ```lucid_dataset_parser.py```:
 
 - ```-d```, ```--dataset_folder```: Folder with the dataset
 - ```-o```, ```--output_folder ```: Folder where  the scripts saves the output. The dataset folder is used when this option is not used
@@ -119,7 +121,7 @@ All the output of the ```lucid-dataset-parser.py``` script is saved within the o
 
 ## Training
 
-The LUCID CNN is implemented in script ```lucid-cnn.py```. The script executes a grid search throughout a set of hyperparameters and saves the model that maximises the F1 score metric in ```h5``` format (hierarchical data format).
+The LUCID CNN is implemented in script ```lucid_cnn.py```. The script executes a grid search throughout a set of hyperparameters and saves the model that maximises the F1 score metric in ```h5``` format (hierarchical data format).
 
 At each point in the grid (each combination of hyperparameters), the training continues indefinitely and stops when the loss does not decrease for a consecutive 25 times. This value is defined with variable ```MAX_CONSECUTIVE_LOSS_INCREASE=25``` at the beginning of the script. Part of the hyperparameters is defined in the script as follows:
 
@@ -139,7 +141,7 @@ All these files can be stored into a single folder, or in multiple  subfolders. 
 
 ### Command options
 
-To execute the training process, the following parameters can be specified when using ```lucid-cnn.py```:
+To execute the training process, the following parameters can be specified when using ```lucid_cnn.py```:
 
 - ```-t```, ```--train```: Starts the training process and specifies the folder with the dataset
 - ```-e```, ```--epochs ```: Maximum number of training epochs for each set of hyperparameters. This option overrides the *early stopping* mechanism based on the loss trend described above
