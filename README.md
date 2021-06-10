@@ -117,7 +117,7 @@ At the end of this operation, the script prints a summary of the pre-processed d
 
 Which means 3518 samples in total (1759 benign and 1759 DDoS), 2849 in the training set, 317 in the validation set and 352 in the test set. The output also shows the total number of packets in the dataset divided in training, validation and test sets and the options used with the script. 
 
-All the output of the ```lucid_dataset_sparser.py``` script is saved within the output folder in the ```history.log``` file.
+All the output of the ```lucid_dataset_parser.py``` script is saved within the output folder in the ```history.log``` file.
 
 ## Training
 
