@@ -383,7 +383,7 @@ def main(argv):
 
                 X = np.expand_dims(X, axis=3)
                 pt0 = time.time()
-                Y_pred = np.squeeze(model.predict(X, batch_size=2048) > 0.5)
+                Y_pred = np.squeeze(model.predict(X, batch_size=2048) > 0.5,axis=1)
                 pt1 = time.time()
                 prediction_time = pt1 - pt0
 
