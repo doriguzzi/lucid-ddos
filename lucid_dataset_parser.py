@@ -428,7 +428,11 @@ def main(argv):
             p.join()
 
         np.seterr(divide='ignore', invalid='ignore')
-        preprocessed_flows = list(flows_list[0])
+        try:
+            preprocessed_flows = list(flows_list[0])
+        except:
+            print ("ERROR: No traffic flows. \nPlease check that the dataset folder name (" + args.dataset_folder[0] + ") is correct and \nthe folder contains the traffic traces in pcap format (the pcap extension is mandatory)")
+            exit(1)
 
         #concatenation of the features
         for results in flows_list[1:]:
