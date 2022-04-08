@@ -1,20 +1,6 @@
-# Copyright (c) 2020 @ FBK - Fondazione Bruno Kessler
-# Author: Roberto Doriguzzi-Corin
-# Project: LUCID: A Practical, Lightweight Deep Learning Solution for DDoS Attack Detection
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import copy
 import os
+from re import I
 import sys
 import csv
 import glob
@@ -342,6 +328,9 @@ def train_test_split(flow_list,train_size=TRAIN_SIZE, shuffle=True):
 def main(argv):
     command_options = " ".join(str(x) for x in argv[1:])
 
+
+# TODO Wywalić argumenty
+
     help_string = 'Usage[0]: python3 lucid_dataset_parser.py --dataset_type <dataset_name> --dataset_folder <folder path> --dataset_id <dataset identifier> --packets_per_flow <n> --time_window <t>\n' \
                   'Usage[1]: python3 lucid_dataset_parser.py --preprocess_folder <folder path>'
     manager = Manager()
@@ -428,6 +417,7 @@ def main(argv):
             p.join()
 
         np.seterr(divide='ignore', invalid='ignore')
+
         try:
             preprocessed_flows = list(flows_list[0])
         except:
@@ -438,6 +428,39 @@ def main(argv):
         for results in flows_list[1:]:
             preprocessed_flows = preprocessed_flows + list(results)
 
+        #TODO: TOO KNN    
+        #5-tuple src_ip_addr, src_port,,dst_ip_addr,dst_port,protocol
+        #print(preprocessed_flows)
+        list_columns = ["src_ip_addr", "src_port", "dst_ip_addr", "dst_port", "protocol", "label", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11"]
+        list_rows = []
+
+        i = 0
+        for five_tuple, time_window_tmp in preprocessed_flows:
+            i += 1
+            src_ip_addr,src_port,dst_ip_addr,dst_port,protocol = five_tuple
+            label = time_window_tmp['label']
+            t = [(k,v) for k, v in time_window_tmp.items()]
+            x = [i[1] for i in t]
+            # print(x)
+            try:
+                for y in x:
+                    ii  = y.tolist()
+                    i0 = tuple(ii[0])
+                    i1 = tuple(ii[1])
+                    list_rows.append((src_ip_addr,src_port,dst_ip_addr,dst_port,protocol, label) + i1)
+                    list_rows.append((src_ip_addr,src_port,dst_ip_addr,dst_port,protocol, label) + i0)
+            except:
+                pass
+
+            # print(f"Tuple: {five_tuple}. Label: {time_window_tmp['label']}")
+
+        with open('knn_tuples.csv', 'w') as csvfile:
+            write = csv.writer(csvfile)
+            write.writerow(list_columns)
+            write.writerows(list_rows)
+    
+
+
         process_time = time.time()-start_time
 
         if dataset_id == '':
@@ -446,10 +469,6 @@ def main(argv):
         filename = str(int(time_window)) + 't-' + str(max_flow_len) + 'n-' + dataset_id + '-preprocess'
         output_file = output_folder + '/' + filename
         output_file = output_file.replace("//", "/") # remove double slashes when needed
-
-        with open(output_file + '.data', 'wb') as filehandle:
-            # store the data as binary data stream
-            pickle.dump(preprocessed_flows, filehandle)
 
 
         (total_flows, ddos_flows, benign_flows),  (total_fragments, ddos_fragments, benign_fragments) = count_flows(preprocessed_flows)
@@ -496,15 +515,7 @@ def main(argv):
                 dataset_id = "IDS201X"
             else:
                 dataset_id = current_dataset_id
-
-
-
-        preprocessed_flows = []
-        for file in filelist:
-            with open(file, 'rb') as filehandle:
-                # read the data as binary data stream
-                preprocessed_flows = preprocessed_flows + pickle.load(filehandle)
-
+                
 
         # balance samples and redux the number of samples when requested
         preprocessed_flows, benign_fragments, ddos_fragments = balance_dataset(preprocessed_flows,args.samples)
