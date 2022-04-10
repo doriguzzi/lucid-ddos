@@ -434,25 +434,19 @@ def main(argv):
         list_columns = ["src_ip_addr", "src_port", "dst_ip_addr", "dst_port", "protocol", "label", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11"]
         list_rows = []
 
-        i = 0
         for five_tuple, time_window_tmp in preprocessed_flows:
-            i += 1
             src_ip_addr,src_port,dst_ip_addr,dst_port,protocol = five_tuple
             label = time_window_tmp['label']
             t = [(k,v) for k, v in time_window_tmp.items()]
             x = [i[1] for i in t]
-            # print(x)
+
             try:
                 for y in x:
                     ii  = y.tolist()
-                    i0 = tuple(ii[0])
-                    i1 = tuple(ii[1])
-                    list_rows.append((src_ip_addr,src_port,dst_ip_addr,dst_port,protocol, label) + i1)
-                    list_rows.append((src_ip_addr,src_port,dst_ip_addr,dst_port,protocol, label) + i0)
+                    for el in ii:
+                        list_rows.append((src_ip_addr,src_port,dst_ip_addr,dst_port,protocol, label) + tuple(el))
             except:
                 pass
-
-            # print(f"Tuple: {five_tuple}. Label: {time_window_tmp['label']}")
 
         with open('knn_tuples.csv', 'w') as csvfile:
             write = csv.writer(csvfile)
