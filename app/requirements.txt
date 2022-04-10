@@ -1,0 +1,7 @@
+lxml
+h5py
+numpy
+pyshark
+scikit-learn
+tensorflow
+jupyter

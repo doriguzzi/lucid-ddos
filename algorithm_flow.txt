@@ -1,0 +1,14 @@
+Flow:
+
+1. (linijka 418 w pliku parser)
+    -metoda process  - parsujemy pcap (tutaj znajduja sie hiper parametry (flow i time window))
+    -(linijka 129) metoda parse_packet - parsujemy dany pakiet w celu standaryzacji (sklada sie z pieciu naglowkowych parametrow source ip, source ip, desitnation port, destination protocol)
+    -(linijka 229) metoda store_packet - ustandaryzowanie pakiety w celu przechowania do uczenia (macierz (y - okno czasowe, x - kierunek ruchu ?)
+    -(linijka 248) metoda apply_labels - dodawanie etykiet, gdzie kluczem jest ip. Uwzgledniamy znane wartosci (atakujacy, ofiara). Tupla zawiera ip (zrodlowy, docelowy). Wartosc 1 - atak, 0 - czysty pakiet
+2. (linijka 342 w pliku parser)
+    -(linijka 452) -metda pickle.dump - zamiana do wesji binarnej. Jest to metoda, ktora tworzy model (ustrukturyzowana forma danych)
+    -(linijka 512) metoda balance_dataset - balansowanie danych zeby byla taka sama liczba atakow i czystych probek. Przygotowanie do uczenia algorytmu
+    -(linijka 518) podzielenie na zbiory uczace, validujace i testowe
+    -(linijka 532) tutaj wykorzystanie metody sum bo ataki sa oznaczone jako 1 dlatego nam podliczy same ataki.
+
+    -(linijka 551) - normalizacja plikow (wszystko powinno byc rowne) i przygotowanie setow w formacie hdf5

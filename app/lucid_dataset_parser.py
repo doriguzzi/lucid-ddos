@@ -448,7 +448,7 @@ def main(argv):
             except:
                 pass
 
-        with open('knn_tuples.csv', 'w') as csvfile:
+        with open('sample-dataset/knn_tuples.csv', 'w') as csvfile:
             write = csv.writer(csvfile)
             write.writerow(list_columns)
             write.writerows(list_rows)
