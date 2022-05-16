@@ -51,11 +51,11 @@ For the sake of simplicity, we omit the command prompt ```(python38)$``` in the 
 
 ## Traffic pre-processing
 
-LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid_dataset_parser.py``` Python script. It currently supports two DDoS datasets from the University of New Brunswick (UNB) (https://www.unb.ca/cic/datasets/index.html): CIC-IDS2017 and CSE-CIC-IDS2018, plus a custom dataset containing a SYN Flood DDoS attack (SYN2020) that will be used for this guide and included in the ```sample-dataset``` folder.
+LUCID requires a labelled dataset, including the traffic traces in the format of ```pcap``` files. The traffic pre-processing functions are implemented in the ```lucid_dataset_parser.py``` Python script. It currently supports three DDoS datasets from the University of New Brunswick (UNB) (https://www.unb.ca/cic/datasets/index.html): CIC-IDS2017, CSE-CIC-IDS2018 and CIC-DDoS2019, plus a custom dataset containing a SYN Flood DDoS attack (SYN2020) that will be used for this guide and included in the ```sample-dataset``` folder.
 
 With term *support*, we mean the capability of the script to correctly label the packets and the traffic flows either as benign or DDoS. In general, this is done by parsing a file with the labels provided with the traffic traces, like in the case of the UNB datasets, or by manually indicating the IP address(es) of the attacker(s) and the IP address(es) of the victim(s) in the code. Of course, also in the latter case, the script must be tuned with the correct information of the traffic (all the attacker/victim pairs of IP addresses), as this information is very specific to the dataset and to the methodology used to generate the traffic. 
 
-Said that, ```lucid_dataset_parser.py``` includes the structures with the pairs attacker/victim of the three datasets mentioned above (CIC-IDS2017, CSE-CIC-IDS2018 and SYN2020), but it can be easily extended to support other datasets by replicating the available code.
+Said that, ```lucid_dataset_parser.py``` includes the structures with the pairs attacker/victim of the three datasets mentioned above (CIC-IDS2017, CSE-CIC-IDS2018, CIC-DDoS2019 and SYN2020), but it can be easily extended to support other datasets by replicating the available code.
 
 For instance, the following Python dictionary provides the IP addresses of the 254 attackers and the victim involved in the custom SYN Flood attack:   
 
@@ -72,7 +72,7 @@ The following parameters can be specified when using ```lucid_dataset_parser.py`
 - ```-o```, ```--output_folder ```: Folder where  the scripts saves the output. The dataset folder is used when this option is not used
 - ```-f```, ```--traffic_type ```: Type of flow to process (all, benign, ddos)
 - ```-p```, ```--preprocess_folder ```: Folder containing the intermediate files ```*.data```
-- ```-t```, ```--dataset_type ```: Type of the dataset. Available options are: IDS2017, IDS2018, SYN2020
+- ```-t```, ```--dataset_type ```: Type of the dataset. Available options are: DOS2017, DOS2018, DOS2019, SYN2020
 - ```-n```, ```--packets_per_flow ```: Maximum number of packets in a sample
 - ```-w```, ```--time_window ```: Length of the time window (in seconds)
 - ```-i```, ```--dataset_id ```: String to append to the names of output files
@@ -207,8 +207,8 @@ Online inference can be started by executing ```lucid_cnn.py``` followed by one 
 
 - ```-pl```, ```--predict_live```: Perform prediction on the network traffic sniffed from a network card or from a ```pcap``` file available on the file system. Therefore, this option must be followed by either the name of a network interface (e.g., ```eth0```) or the path to a ```pcap``` file (e.g., ```/home/user/traffic_capture.pcap```)
 - ```-m```, ```--model```: Model to be used for the prediction. The model in ```h5``` format produced with the training
-- ```-y```, ```--dataset_type```: One between ```IDS2017``` and ```IDS2018``` in the case of ```pcap``` files from the UNB's datasets, or ```SYN2020``` for the custom dataset provided with this code. This option is not used by LUCID for the classification task, but only to produce the classification statistics (e.g., accuracy, F1 score, etc,) by comparing the ground truth labels with the LUCID's output
-- ```-a```, ```--attack_net```: Specifies the subnet of the attack network (e.g., ```192.168.0.0/24```). Like option ```dataset_type```, this is used to generate the ground truth labels. This option is used, along with option ```victim_net```, in the case of custom traffic or pcap file with IP address schemes different from those in the three datasets ```IDS2017```,  ```IDS2018```  or ```SYN2020``` 
+- ```-y```, ```--dataset_type```: One between ```DOS2017```, ```DOS2018``` and ```DOS2019``` in the case of ```pcap``` files from the UNB's datasets, or ```SYN2020``` for the custom dataset provided with this code. This option is not used by LUCID for the classification task, but only to produce the classification statistics (e.g., accuracy, F1 score, etc,) by comparing the ground truth labels with the LUCID's output
+- ```-a```, ```--attack_net```: Specifies the subnet of the attack network (e.g., ```192.168.0.0/24```). Like option ```dataset_type```, this is used to generate the ground truth labels. This option is used, along with option ```victim_net```, in the case of custom traffic or pcap file with IP address schemes different from those in the three datasets ```DOS2017```,  ```DOS2018```, ```DOS2019```  or ```SYN2020``` 
 - ```-y```, ```--victim_net```: The subnet of the victim network (e.g., ```10.42.0.0/24```), specified along with option ```attack_net``` (see description above).
 
 ### Inference on live traffic
