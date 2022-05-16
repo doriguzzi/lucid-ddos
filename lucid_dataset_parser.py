@@ -13,12 +13,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import copy
-import os
+
 import sys
-import csv
-import glob
-import h5py
 import time
 import pyshark
 import socket
@@ -27,11 +23,7 @@ import random
 import hashlib
 import argparse
 import ipaddress
-import numpy as np
-from lxml import etree
-from collections import OrderedDict
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.utils import shuffle as sklearn_shuffle
 from multiprocessing import Process, Manager, Value, Queue
 from util_functions import *
 
@@ -49,10 +41,13 @@ IDS2017_DDOS_FLOWS = {'attackers': ['172.16.0.1'],
 CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
                       'victims': ['10.42.0.2']}
 
+DOS2019_FLOWS = {'attackers': ['172.16.0.5'], 'victims': ['192.168.50.1', '192.168.50.4']}
+
 DDOS_ATTACK_SPECS = {
-    'IDS2017' : IDS2017_DDOS_FLOWS,
-    'IDS2018' : IDS2018_DDOS_FLOWS,
-    'SYN2020' : CUSTOM_DDOS_SYN
+    'DOS2017' : IDS2017_DDOS_FLOWS,
+    'DOS2018' : IDS2018_DDOS_FLOWS,
+    'SYN2020' : CUSTOM_DDOS_SYN,
+    'DOS2019': DOS2019_FLOWS
 }
 
 
@@ -61,20 +56,6 @@ vector_proto.fit_transform(protocols).todense()
 
 random.seed(SEED)
 np.random.seed(SEED)
-
-
-
-def get_pkt_direction(srcIP,dstIP):
-    internalIP = "192.168"
-    if internalIP in srcIP and internalIP in dstIP:
-        return 0
-    elif internalIP in srcIP:
-        return 1
-    elif internalIP in dstIP:
-        return 2
-    else:
-        print ("No private address in this flow!!!!")
-        return 3
 
 class packet_features:
     def __init__(self):
@@ -102,7 +83,7 @@ def get_ddos_flows(attackers,victims):
     return DDOS_FLOWS
 
 # function that build the labels based on the dataset type
-def parse_labels(dataset_type=None, attackers=None,victims=None):
+def parse_labels(dataset_type=None, attackers=None,victims=None, label=1):
     output_dict = {}
 
     if attackers is not None and victims is not None:
@@ -120,9 +101,9 @@ def parse_labels(dataset_type=None, attackers=None,victims=None):
             key_bwd = (ip_dst, ip_src)
 
             if key_fwd not in output_dict:
-                output_dict[key_fwd] = 1
+                output_dict[key_fwd] = label
             if key_bwd not in output_dict:
-                output_dict[key_bwd] = 1
+                output_dict[key_bwd] = label
 
     return output_dict
 
@@ -179,7 +160,7 @@ def parse_packet(pkt):
         return None
 
 # Offline preprocessing of pcap files for model training, validation and testing
-def process_pcap(pcap_file,dataset_type,in_labels,max_flow_len,labelled_flows,traffic_type='all',time_window=TIME_WINDOW):
+def process_pcap(pcap_file,dataset_type,in_labels,max_flow_len,labelled_flows,max_flows=0, traffic_type='all',time_window=TIME_WINDOW):
     start_time = time.time()
     temp_dict = OrderedDict()
     start_time_window = -1
@@ -197,7 +178,9 @@ def process_pcap(pcap_file,dataset_type,in_labels,max_flow_len,labelled_flows,tr
             start_time_window = float(pkt.sniff_timestamp)
 
         pf = parse_packet(pkt)
-        temp_dict = store_packet(pf, temp_dict, start_time_window, max_flow_len)
+        store_packet(pf, temp_dict, start_time_window, max_flow_len)
+        if max_flows > 0 and len(temp_dict) >= max_flows:
+            break
 
     apply_labels(temp_dict, labelled_flows, in_labels, traffic_type)
     print('Completed file {} in {} seconds.'.format(pcap_name, time.time() - start_time))
@@ -298,7 +281,7 @@ def balance_dataset(flows,total_fragments=float('inf')):
         if flow[1]['label'] == 0 and (new_benign_fragments < min_fragments ):
             new_benign_fragments += len(flow[1]) - 1
             new_flow_list.append(flow)
-        elif flow[1]['label'] == 1 and (new_ddos_fragments < min_fragments):
+        elif flow[1]['label'] > 0 and (new_ddos_fragments < min_fragments):
             new_ddos_fragments += len(flow[1]) - 1
             new_flow_list.append(flow)
 
@@ -368,9 +351,13 @@ def main(argv):
                         help='Number of training samples in the reduced output')
     parser.add_argument('-i', '--dataset_id', nargs='+', type=str,
                         help='String to append to the names of output files')
+    parser.add_argument('-m', '--max_flows', default=0, type=int,
+                        help='Max number of flows to extract from the pcap files')
+    parser.add_argument('-l', '--label', default=1, type=int,
+                        help='Label assigned to the DDoS class')
 
     parser.add_argument('-t', '--dataset_type', nargs='+', type=str,
-                        help='Type of the dataset. Available options are: IDS2017, IDS2018, SYN2020')
+                        help='Type of the dataset. Available options are: DOS2017, DOS2018, DOS2019, SYN2020')
 
     parser.add_argument('-w', '--time_window', nargs='+', type=str,
                         help='Length of the time window')
@@ -409,13 +396,13 @@ def main(argv):
             output_folder = args.dataset_folder[0]
 
         filelist = glob.glob(args.dataset_folder[0]+ '/*.pcap')
-        in_labels = parse_labels(args.dataset_type[0],args.dataset_folder[0])
+        in_labels = parse_labels(args.dataset_type[0],args.dataset_folder[0],label=args.label)
 
         start_time = time.time()
         for file in filelist:
             try:
                 flows = manager.list()
-                p = Process(target=process_pcap,args=(file,args.dataset_type[0],in_labels,max_flow_len,flows,traffic_type,time_window))
+                p = Process(target=process_pcap,args=(file,args.dataset_type[0],in_labels,max_flow_len,flows,args.max_flows, traffic_type,time_window))
                 process_list.append(p)
                 flows_list.append(flows)
             except FileNotFoundError as e:
@@ -526,8 +513,8 @@ def main(argv):
         mins,maxs = static_min_max(time_window=time_window)
 
         total_examples = len(y_full)
-        total_ddos_examples = sum(y_full)
-        total_benign_examples = len(y_full) - sum(y_full)
+        total_ddos_examples = np.count_nonzero(y_full)
+        total_benign_examples = total_examples - total_ddos_examples
 
         output_file = output_folder + '/' + str(time_window) + 't-' + str(max_flow_len) + 'n-' + dataset_id + '-dataset'
         if args.no_split == True: # don't split the dataset
@@ -682,7 +669,7 @@ def main(argv):
             hf.close()
 
         total_flows = final_y['train'].shape[0]+final_y['val'].shape[0]+final_y['test'].shape[0]
-        ddos_flows = sum(final_y['train'])+sum(final_y['val'])+sum(final_y['test'])
+        ddos_flows = np.count_nonzero(final_y['train'])+np.count_nonzero(final_y['val'])+np.count_nonzero(final_y['test'])
         benign_flows = total_flows-ddos_flows
         [train_packets, val_packets, test_packets] = count_packets_in_dataset([final_X['train'], final_X['val'], final_X['test']])
         log_string = time.strftime("%Y-%m-%d %H:%M:%S") + " | total_flows (tot,ben,ddos):(" + str(total_flows) + "," + str(benign_flows) + "," + str(ddos_flows) + \
