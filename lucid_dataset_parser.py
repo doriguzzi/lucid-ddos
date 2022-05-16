@@ -687,7 +687,7 @@ def main(argv):
     if args.dataset_folder is None and args.preprocess_folder is None and args.preprocess_file is None and args.balance_folder is None:
         print (help_string)
     if args.dataset_type is None and args.dataset_folder is not None:
-        print("Please specify the dataset type (IDS2017, IDS2018, SYN2020)!")
+        print("Please specify the dataset type (DOS2017, DOS2018, DOS2020)!")
         print(help_string)
     if args.output_folder is None and args.balance_folder is not None:
         print("Please specify the output folder!")

@@ -252,7 +252,7 @@ def main(argv):
                         help='Apply dropout to the convolutional layer')
 
     parser.add_argument('-y', '--dataset_type', default=None, type=str,
-                        help='Type of the dataset. Available options are: IDS2017, IDS2018, SYN2020')
+                        help='Type of the dataset. Available options are: DOS2017, DOS2018, DOS2019, SYN2020')
 
     args = parser.parse_args()
 
