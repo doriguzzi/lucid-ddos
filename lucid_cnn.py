@@ -33,11 +33,14 @@ config = tf.compat.v1.ConfigProto(inter_op_parallelism_threads=1)
 from itertools import cycle
 from tensorflow.keras import regularizers
 from tensorflow.keras.optimizers import Adam,SGD
-from tensorflow.keras.layers import Input, Dense, Activation, ZeroPadding2D, BatchNormalization, Flatten, Conv2D, Conv1D, LSTM, Reshape
-from tensorflow.keras.layers import AveragePooling2D, MaxPooling2D, Dropout, GlobalMaxPooling2D, GlobalAveragePooling2D
+from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Conv2D
+from tensorflow.keras.layers import Dropout, GlobalMaxPooling2D
 from tensorflow.keras.models import Model, Sequential, save_model, load_model, clone_model
 from sklearn.metrics import classification_report, f1_score, precision_score, recall_score, roc_auc_score,accuracy_score,mean_squared_error, log_loss, confusion_matrix
 from sklearn.utils import shuffle
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from lucid_dataset_parser import *
 
 import tensorflow.keras.backend as K
@@ -53,165 +56,39 @@ VALIDATION_HEADER = "Model         TIME(sec) ACC    ERR    F1     PPV    TPR    
 PREDICTION_HEADER = "Model         TIME(sec) PACKETS SAMPLES DDOS% ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Data Source\n"
 PREDICTION_HEADER_SHORT = "Model         TIME(sec) PACKETS SAMPLES DDOS% Data Source\n"
 # hyperparameters
-MAX_CONSECUTIVE_LOSS_INCREASE = 25
-LR = [0.1,0.01,0.001]
-BATCH_SIZE = [1024,2048]
-KERNELS = [1,2,4,8,16,32,64]
+hyperparamters = {
+    "learning_rate": [0.1,0.01,0.001],
+    "batch_size": [1024,2048],
+    "kernels": [1,2,4,8,16,32,64],
+    "regularization" : ['l1','l2'],
+    "dropout" : [0.5,0.7,0.9]
+}
 
-def Conv2DModel(model_name, input_shape,kernels,kernel_rows,kernel_col,pool_height='max', regularization=None,dropout=None):
+PATIENCE = 25
+
+def Conv2DModel(model_name,input_shape,kernel_col, kernels=64,kernel_rows=3,learning_rate=0.01,regularization=None,dropout=None):
     K.clear_session()
 
     model = Sequential(name=model_name)
-    if regularization == 'l1' or regularization == "l2":
-        regularizer = regularization
-    else:
-        regularizer = None
+    regularizer = regularization
 
     model.add(Conv2D(kernels, (kernel_rows,kernel_col), strides=(1, 1), input_shape=input_shape, kernel_regularizer=regularizer, name='conv0'))
     if dropout != None and type(dropout) == float:
         model.add(Dropout(dropout))
     model.add(Activation('relu'))
-    current_shape = model.layers[0].output_shape
-    current_rows = current_shape[1]
-    current_cols = current_shape[2]
-    current_channels = current_shape[3]
 
-    # height of the pooling region
-    if pool_height == 'min':
-        pool_height = 3
-    elif pool_height == 'max':
-        pool_height = current_rows
-    else:
-        pool_height = 3
-
-    pool_size = (min(pool_height, current_rows), min(3, current_cols))
-    model.add(MaxPooling2D(pool_size=pool_size, name='mp0'))
+    model.add(GlobalMaxPooling2D())
     model.add(Flatten())
     model.add(Dense(1, activation='sigmoid', name='fc1'))
 
     print(model.summary())
+    compileModel(model, learning_rate)
     return model
 
 def compileModel(model,lr):
-    # optimizer = SGD(lr=lr, momentum=0.0, decay=0.0, nesterov=False)
-    optimizer = Adam(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+    # optimizer = SGD(learning_rate=lr, momentum=0.0, decay=0.0, nesterov=False)
+    optimizer = Adam(learning_rate=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
     model.compile(loss='binary_crossentropy', optimizer=optimizer,metrics=['accuracy'])  # here we specify the loss function
-
-def trainingEpoch(model, batch_size, parameters, X_train,Y_train,X_val,Y_val, writer):
-    tt0 = time.time()
-    history = model.fit(x=X_train, y=Y_train, validation_data=(X_val, Y_val), epochs=1, batch_size=batch_size, verbose=2, callbacks=[])  # TODO: verify which callbacks can be useful here (https://keras.io/callbacks/)
-    tt1 = time.time()
-
-    accuracy_train = history.history['accuracy'][0]
-    loss_train = history.history['loss'][0]
-    accuracy_val = history.history['val_accuracy'][0]
-    loss_val = history.history['val_loss'][0]
-
-    TRAINING_HEADER = ['Model', 'TIME(t)', 'ACC(t)', 'ERR(t)', 'ACC(v)', 'ERR(v)', 'Parameters']
-
-    row = {'Model': model.name.ljust(MODEL_NAME_LEN), 'TIME(t)': '{:04.3f}'.format(tt1-tt0), 'ACC(t)': '{:06.5f}'.format(accuracy_train),
-           'ERR(t)': '{:06.5f}'.format(loss_train), 'ACC(v)': '{:06.5f}'.format(accuracy_val), 'ERR(v)': '{:06.5f}'.format(loss_val),
-           'Parameters': parameters}
-
-    writer.writerow(row)
-
-    return loss_val, accuracy_val
-
-def trainCNNModels(model_name, epochs, X_train, Y_train,X_val, Y_val, dataset_folder, time_window, max_flow_len,regularization=None, dropout=None):
-
-    packets = X_train.shape[1]
-    features = X_train.shape[2]
-    best_f1_score = 0
-
-    stats_file = open(dataset_folder + 'training_history-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a')
-    stats_writer = csv.DictWriter(stats_file, fieldnames=TRAINING_HEADER)
-    stats_writer.writeheader()
-    stats_file.flush()
-
-    if epochs == 0:
-        epochs_range = cycle([0]) # infinite epochs
-        epochs = 'inf'
-    else:
-        epochs_range = range(epochs)
-
-    for lr in LR:
-        for kernels in KERNELS:
-            for kernel_rows in [min(3,packets)]:
-                for kernel_columns in [features]:
-                    for pool_height in ['min','max']: # min=3, max=number of rows after the convolution
-                        for batch_size in BATCH_SIZE:
-                            stop_counter = 0
-                            min_loss = float('inf')
-                            max_acc_val = 0
-                            parameters = "lr=" + '{:04.3f}'.format(lr) + ";b=" + '{:04d}'.format(batch_size) + ";n=" + '{:03d}'.format(max_flow_len) + ";t=" + '{:03d}'.format(time_window) + ";k=" + '{:03d}'.format(kernels) + ";h=(" + '{:02d}'.format(kernel_rows) + "," + '{:02d}'.format(kernel_columns) + ");m=" + pool_height
-                            model = Conv2DModel(model_name, X_train.shape[1:4], kernels, kernel_rows, kernel_columns,pool_height,regularization,dropout)
-                            compileModel(model,lr)
-                            best_model = None
-                            best_model_loss_val = float('inf')
-                            epoch_counter = 0
-                            for epoch in epochs_range:
-                                print("Epoch: %d/%s" % (epoch_counter + 1, str(epochs)))
-                                epoch_counter += 1
-                                loss_val, acc_val= trainingEpoch(model, batch_size, parameters, X_train, Y_train, X_val, Y_val, stats_writer)
-
-                                if acc_val > max_acc_val:
-                                    max_acc_val = acc_val
-                                    best_model_loss_val = loss_val
-                                    best_model = clone_model(model)
-                                    best_model.set_weights(model.get_weights())
-
-                                if loss_val > min_loss:
-                                    stop_counter += 1
-                                else:
-                                    min_loss = loss_val
-                                    stop_counter = 0
-
-                                if stop_counter > MAX_CONSECUTIVE_LOSS_INCREASE or max_acc_val == 1 or epoch+1 == epochs: # early stopping management
-                                    if best_model is not None:
-                                        tp0 = time.time()
-                                        Y_pred_val = (best_model.predict(X_val) > 0.5)
-                                        tp1 = time.time()
-                                        Y_true_val = Y_val.reshape((Y_val.shape[0], 1))
-                                        acc_score_val = accuracy_score(Y_true_val, Y_pred_val)
-                                        ppv_score_val = precision_score(Y_true_val, Y_pred_val)
-                                        f1_score_val = f1_score(Y_true_val, Y_pred_val)
-                                        tn, fp, fn, tp = confusion_matrix(Y_true_val, Y_pred_val, labels=[0, 1]).ravel()
-                                        tnr_score_val = tn / (tn + fp)
-                                        fpr_score_val = fp / (fp + tn)
-                                        fnr_score_val = fn / (fn + tp)
-                                        tpr_score_val = tp / (tp + fn)
-
-                                        model_name_string = best_model.name.ljust(MODEL_NAME_LEN)
-                                        time_string_predict = '{:10.3f}'.format(tp1 - tp0) + " "
-                                        test_string_val = '{:05.4f}'.format(acc_score_val) + \
-                                                          " " + '{:05.4f}'.format(best_model_loss_val) + " " + '{:05.4f}'.format(f1_score_val) + \
-                                                          " " + '{:05.4f}'.format(ppv_score_val) + \
-                                                          " " + '{:05.4f}'.format(tpr_score_val) + " " + '{:05.4f}'.format(fpr_score_val) + \
-                                                          " " + '{:05.4f}'.format(tnr_score_val) + " " + '{:05.4f}'.format(fnr_score_val) + " "
-
-                                        test_string_parameters = parameters + "\n"
-
-                                        output_string = model_name_string + time_string_predict + test_string_val + test_string_parameters
-
-                                        if f1_score_val > best_f1_score: #save new best model along with its stats and parameters
-                                            try:
-                                                filename = dataset_folder + str(time_window) + 't-' + str(
-                                                    max_flow_len) + 'n-' + best_model.name
-                                                best_model.save(filename + '.h5')
-                                                model_stats_file = open(filename + '.csv', 'w')
-                                                model_stats_file.write(VALIDATION_HEADER)
-                                                model_stats_file.write(output_string)
-                                                model_stats_file.flush()
-                                                model_stats_file.close()
-                                                best_f1_score = f1_score_val
-                                            except:
-                                                print("An exception occurred when saving the model!")
-                                        del best_model
-
-                                    del model
-                                    break
-
-    stats_file.close()
 
 def main(argv):
     help_string = 'Usage: python3 lucid_cnn.py --train <dataset_folder> -e <epocs>'
@@ -223,7 +100,7 @@ def main(argv):
     parser.add_argument('-t', '--train', nargs='+', type=str,
                         help='Start the training process')
 
-    parser.add_argument('-e', '--epochs', default=0, type=int,
+    parser.add_argument('-e', '--epochs', default=1000, type=int,
                         help='Training iterations')
 
     parser.add_argument('-a', '--attack_net', default=None, type=str,
@@ -280,8 +157,14 @@ def main(argv):
 
             print ("\nCurrent dataset folder: ", dataset_folder)
 
-            trainCNNModels(dataset_name + "-LUCID", args.epochs,X_train,Y_train,X_val,Y_val,dataset_folder, time_window, max_flow_len, args.regularization, args.dropout)
+            model_name = dataset_name + "-LUCID"
+            keras_classifier = KerasClassifier(build_fn=Conv2DModel,model_name=model_name, input_shape=X_train.shape[1:],kernel_col=X_train.shape[2])
+            rnd_search_cv = GridSearchCV(keras_classifier, hyperparamters, cv=2, return_train_score=True)
 
+            es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=PATIENCE)
+            best_model_filename = dataset_folder + str(time_window) + 't-' + str(max_flow_len) + 'n-' + model_name + '.h5'
+            mc = ModelCheckpoint(best_model_filename, monitor='val_accuracy', mode='max', verbose=1, save_best_only=True)
+            rnd_search_cv.fit(X_train, Y_train, epochs=args.epochs,validation_data=(X_val, Y_val), callbacks=[es,mc])
 
     if args.predict is not None:
         if os.path.isdir("./log") == False:
