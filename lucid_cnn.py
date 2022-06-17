@@ -50,11 +50,9 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
 #config.log_device_placement = True  # to log device placement (on which device the operation ran)
 
-MODEL_NAME_LEN = 10
 TRAINING_HEADER = ['Model', 'TIME(t)', 'ACC(t)', 'ERR(t)', 'ACC(v)', 'ERR(v)', 'Parameters']
-VALIDATION_HEADER = "Model         TIME(sec) ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Parameters\n"
-PREDICTION_HEADER = "Model         TIME(sec) PACKETS SAMPLES DDOS% ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Data Source\n"
-PREDICTION_HEADER_SHORT = "Model         TIME(sec) PACKETS SAMPLES DDOS% Data Source\n"
+PREDICT_HEADER = ['Model', 'Time', 'Packets', 'Samples', 'DDOS%', 'Accuracy', 'F1Score', 'TPR', 'FPR','TNR', 'FNR', 'Source']
+
 # hyperparameters
 hyperparamters = {
     "learning_rate": [0.1,0.01,0.001],
@@ -169,12 +167,13 @@ def main(argv):
     if args.predict is not None:
         if os.path.isdir("./log") == False:
             os.mkdir("./log")
-        stats_file = open('./log/predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a')
-        stats_file.write(PREDICTION_HEADER)
+        predict_file = open('./log/predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a', newline='')
+        predict_file.truncate(0)  # clean the file content (as we open the file in append mode)
+        predict_writer = csv.DictWriter(predict_file, fieldnames=PREDICT_HEADER)
+        predict_writer.writeheader()
+        predict_file.flush()
 
-        iterations = 1
-        if args.iterations is not None and args.iterations > 0:
-            iterations = args.iterations
+        iterations = args.iterations
 
         dataset_filelist = glob.glob(args.predict + "/*test.hdf5")
 
@@ -213,13 +212,20 @@ def main(argv):
 
                     avg_time = avg_time / iterations
 
-                    report_results(np.squeeze(Y_true), Y_pred, packets, model_name_string, filename, stats_file, avg_time)
+                    report_results(np.squeeze(Y_true), Y_pred, packets, model_name_string, filename, avg_time,predict_writer)
+                    predict_file.flush()
+
+        predict_file.close()
 
     if args.predict_live is not None:
         if os.path.isdir("./log") == False:
             os.mkdir("./log")
-        stats_file = open('./log/predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a')
-        stats_file.write(PREDICTION_HEADER)
+
+        predict_file = open('./log/predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a', newline='')
+        predict_file.truncate(0)  # clean the file content (as we open the file in append mode)
+        predict_writer = csv.DictWriter(predict_file, fieldnames=PREDICT_HEADER)
+        predict_writer.writeheader()
+        predict_file.flush()
 
         if args.predict_live is None:
             print("Please specify a valid network interface or pcap file!")
@@ -239,9 +245,9 @@ def main(argv):
 
         # do not forget command sudo ./jetson_clocks.sh on the TX2 board before testing
         if args.model is not None and args.model.endswith('.h5'):
-            model_path = args.model
+            model_path = load_model(args.model)
         else:
-            print ("No valid LUCID model specified!")
+            print ("No valid model specified!")
             exit(-1)
 
         model_filename = model_path.split('/')[-1].strip()
@@ -254,7 +260,7 @@ def main(argv):
         mins, maxs = static_min_max(time_window)
 
         while (True):
-            samples = process_live_traffic(cap, args.dataset_type, labels, max_flow_len, traffic_type="all", time_window=time_window)
+            samples = process_live_traffic(cap, labels, max_flow_len, traffic_type="all", time_window=time_window)
             if len(samples) > 0:
                 X,Y_true,keys = dataset_to_list_of_fragments(samples)
                 X = np.array(normalize_and_padding(X, mins, maxs, max_flow_len))
@@ -269,47 +275,38 @@ def main(argv):
                 pt1 = time.time()
                 prediction_time = pt1 - pt0
 
-                [packets] = count_packets_in_dataset([X])
-                report_results(Y_true, Y_pred, packets, model_name_string,
-                               data_source, stats_file, prediction_time)
+                try:
+                    [packets] = count_packets_in_dataset([X])
+                    report_results(np.squeeze(Y_true), Y_pred, packets, model_name_string, data_source, prediction_time,predict_writer)
+                    predict_file.flush()
+                except:
+                    print("No packets received during the last time window.")
 
-def report_results(Y_true, Y_pred,packets, model_name, dataset_filename, stats_file,prediction_time):
-    ddos_rate = '{:04.3f}'.format(sum(Y_pred)/Y_pred.shape[0])
+        predict_file.close()
 
-    time_string_predict = '{:10.3f}'.format(prediction_time) + " "
-    performance_string = '{:07.0f}'.format(packets) + " " + '{:07.0f}'.format(Y_pred.shape[0]) + " " + ddos_rate + " "
+def report_results(Y_true, Y_pred, packets, model_name, data_source, prediction_time, writer):
+    ddos_rate = '{:04.3f}'.format(sum(Y_pred) / Y_pred.shape[0])
 
-    if Y_true is not None: # if we have the labels, we can compute the classification accuracy
+    if Y_true is not None:  # if we have the labels, we can compute the classification accuracy
         Y_true = Y_true.reshape((Y_true.shape[0], 1))
         accuracy = accuracy_score(Y_true, Y_pred)
-        try:
-            loss = log_loss(Y_true, Y_pred)
-        except:
-            loss = 0
-        ppv = precision_score(Y_true, Y_pred)
+
         f1 = f1_score(Y_true, Y_pred)
-        tn, fp, fn, tp = confusion_matrix(Y_true, Y_pred,labels=[0,1]).ravel()
+        tn, fp, fn, tp = confusion_matrix(Y_true, Y_pred, labels=[0, 1]).ravel()
         tnr = tn / (tn + fp)
         fpr = fp / (fp + tn)
         fnr = fn / (fn + tp)
         tpr = tp / (tp + fn)
 
-        test_string_pre = '{:05.4f}'.format(accuracy) + \
-                          " " + '{:05.4f}'.format(loss) + " " + '{:05.4f}'.format(f1) + \
-                          " " + '{:05.4f}'.format(ppv) + \
-                          " " + '{:05.4f}'.format(tpr) + " " + '{:05.4f}'.format(fpr) + \
-                          " " + '{:05.4f}'.format(tnr) + " " + '{:05.4f}'.format(fnr) + \
-                          " " + dataset_filename + "\n"
-        output_header = PREDICTION_HEADER[:-1]
-        output_string = model_name + time_string_predict + performance_string + test_string_pre
-
-        stats_file.write(output_string)
-        stats_file.flush()
+        row = {'Model': model_name, 'Time': '{:04.3f}'.format(prediction_time), 'Packets': packets,
+               'Samples': Y_pred.shape[0], 'DDOS%': ddos_rate, 'Accuracy': accuracy, 'F1Score': f1,
+               'TPR': tpr, 'FPR': fpr, 'TNR': tnr, 'FNR': fnr, 'Source': data_source}
     else:
-        output_header = PREDICTION_HEADER_SHORT[:-1]
-        output_string = model_name + time_string_predict + performance_string + dataset_filename + "\n"
-    print(output_header)
-    print(output_string)
+        row = {'Model': model_name, 'Time': '{:04.3f}'.format(prediction_time), 'Packets': packets,
+               'Samples': Y_pred.shape[0], 'DDOS%': ddos_rate, 'Accuracy': "N/A", 'F1Score': "N/A",
+               'TPR': "N/A", 'FPR': "N/A", 'TNR': "N/A", 'FNR': "N/A", 'Source': data_source}
+    pprint.pprint(row, sort_dicts=False)
+    writer.writerow(row)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
