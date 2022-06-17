@@ -22,6 +22,7 @@ import tensorflow as tf
 import numpy as np
 import random as rn
 import os
+import csv
 from util_functions import *
 # Seed Random Numbers
 os.environ['PYTHONHASHSEED']=str(SEED)
@@ -47,7 +48,7 @@ config.gpu_options.allow_growth = True  # dynamically grow the memory used on th
 #config.log_device_placement = True  # to log device placement (on which device the operation ran)
 
 MODEL_NAME_LEN = 10
-TRAINING_HEADER = "Model           TIME(t) ACC(t)  ERR(t)  ACC(v)  ERR(v)  Parameters\n"
+TRAINING_HEADER = ['Model', 'TIME(t)', 'ACC(t)', 'ERR(t)', 'ACC(v)', 'ERR(v)', 'Parameters']
 VALIDATION_HEADER = "Model         TIME(sec) ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Parameters\n"
 PREDICTION_HEADER = "Model         TIME(sec) PACKETS SAMPLES DDOS% ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Data Source\n"
 PREDICTION_HEADER_SHORT = "Model         TIME(sec) PACKETS SAMPLES DDOS% Data Source\n"
@@ -96,7 +97,7 @@ def compileModel(model,lr):
     optimizer = Adam(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
     model.compile(loss='binary_crossentropy', optimizer=optimizer,metrics=['accuracy'])  # here we specify the loss function
 
-def trainingEpoch(model, batch_size, parameters, X_train,Y_train,X_val,Y_val, output_file):
+def trainingEpoch(model, batch_size, parameters, X_train,Y_train,X_val,Y_val, writer):
     tt0 = time.time()
     history = model.fit(x=X_train, y=Y_train, validation_data=(X_val, Y_val), epochs=1, batch_size=batch_size, verbose=2, callbacks=[])  # TODO: verify which callbacks can be useful here (https://keras.io/callbacks/)
     tt1 = time.time()
@@ -106,17 +107,13 @@ def trainingEpoch(model, batch_size, parameters, X_train,Y_train,X_val,Y_val, ou
     accuracy_val = history.history['val_accuracy'][0]
     loss_val = history.history['val_loss'][0]
 
-    model_name_string = model.name.ljust(MODEL_NAME_LEN)
-    time_string_train = '{:10.5f}'.format(tt1-tt0) + " "
+    TRAINING_HEADER = ['Model', 'TIME(t)', 'ACC(t)', 'ERR(t)', 'ACC(v)', 'ERR(v)', 'Parameters']
 
-    test_string_train = '{:06.5f}'.format(accuracy_train) + " " + '{:06.5f}'.format(loss_train) + " "
+    row = {'Model': model.name.ljust(MODEL_NAME_LEN), 'TIME(t)': '{:04.3f}'.format(tt1-tt0), 'ACC(t)': '{:06.5f}'.format(accuracy_train),
+           'ERR(t)': '{:06.5f}'.format(loss_train), 'ACC(v)': '{:06.5f}'.format(accuracy_val), 'ERR(v)': '{:06.5f}'.format(loss_val),
+           'Parameters': parameters}
 
-    test_string_val = '{:06.5f}'.format(accuracy_val) +  " " + '{:06.5f}'.format(loss_val) + " "
-    test_string_parameters = parameters + "\n"
-
-    output_string = model_name_string + time_string_train + test_string_train + test_string_val+ test_string_parameters
-    output_file.write(output_string)
-    output_file.flush()
+    writer.writerow(row)
 
     return loss_val, accuracy_val
 
@@ -127,7 +124,9 @@ def trainCNNModels(model_name, epochs, X_train, Y_train,X_val, Y_val, dataset_fo
     best_f1_score = 0
 
     stats_file = open(dataset_folder + 'training_history-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a')
-    stats_file.write(TRAINING_HEADER)
+    stats_writer = csv.DictWriter(stats_file, fieldnames=TRAINING_HEADER)
+    stats_writer.writeheader()
+    stats_file.flush()
 
     if epochs == 0:
         epochs_range = cycle([0]) # infinite epochs
@@ -144,7 +143,7 @@ def trainCNNModels(model_name, epochs, X_train, Y_train,X_val, Y_val, dataset_fo
                             stop_counter = 0
                             min_loss = float('inf')
                             max_acc_val = 0
-                            parameters = "lr=" + '{:04.3f}'.format(lr) + ",b=" + '{:04d}'.format(batch_size) + ",n=" + '{:03d}'.format(max_flow_len) + ",t=" + '{:03d}'.format(time_window) + ",k=" + '{:03d}'.format(kernels) + ",h=(" + '{:02d}'.format(kernel_rows) + "," + '{:02d}'.format(kernel_columns) + "),m=" + pool_height
+                            parameters = "lr=" + '{:04.3f}'.format(lr) + ";b=" + '{:04d}'.format(batch_size) + ";n=" + '{:03d}'.format(max_flow_len) + ";t=" + '{:03d}'.format(time_window) + ";k=" + '{:03d}'.format(kernels) + ";h=(" + '{:02d}'.format(kernel_rows) + "," + '{:02d}'.format(kernel_columns) + ");m=" + pool_height
                             model = Conv2DModel(model_name, X_train.shape[1:4], kernels, kernel_rows, kernel_columns,pool_height,regularization,dropout)
                             compileModel(model,lr)
                             best_model = None
@@ -153,7 +152,7 @@ def trainCNNModels(model_name, epochs, X_train, Y_train,X_val, Y_val, dataset_fo
                             for epoch in epochs_range:
                                 print("Epoch: %d/%s" % (epoch_counter + 1, str(epochs)))
                                 epoch_counter += 1
-                                loss_val, acc_val= trainingEpoch(model, batch_size, parameters, X_train, Y_train, X_val, Y_val, stats_file)
+                                loss_val, acc_val= trainingEpoch(model, batch_size, parameters, X_train, Y_train, X_val, Y_val, stats_writer)
 
                                 if acc_val > max_acc_val:
                                     max_acc_val = acc_val
