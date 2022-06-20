@@ -1,4 +1,4 @@
-# Copyright (c) 2020 @ FBK - Fondazione Bruno Kessler
+# Copyright (c) 2022 @ FBK - Fondazione Bruno Kessler
 # Author: Roberto Doriguzzi-Corin
 # Project: LUCID: A Practical, Lightweight Deep Learning Solution for DDoS Attack Detection
 #
@@ -23,6 +23,7 @@ import numpy as np
 import random as rn
 import os
 import csv
+import pprint
 from util_functions import *
 # Seed Random Numbers
 os.environ['PYTHONHASHSEED']=str(SEED)
@@ -245,7 +246,7 @@ def main(argv):
 
         # do not forget command sudo ./jetson_clocks.sh on the TX2 board before testing
         if args.model is not None and args.model.endswith('.h5'):
-            model_path = load_model(args.model)
+            model_path = args.model
         else:
             print ("No valid model specified!")
             exit(-1)
@@ -260,7 +261,7 @@ def main(argv):
         mins, maxs = static_min_max(time_window)
 
         while (True):
-            samples = process_live_traffic(cap, labels, max_flow_len, traffic_type="all", time_window=time_window)
+            samples = process_live_traffic(cap, args.dataset_type, labels, max_flow_len, traffic_type="all", time_window=time_window)
             if len(samples) > 0:
                 X,Y_true,keys = dataset_to_list_of_fragments(samples)
                 X = np.array(normalize_and_padding(X, mins, maxs, max_flow_len))

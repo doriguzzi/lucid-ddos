@@ -1,4 +1,4 @@
-# Copyright (c) 2020 @ FBK - Fondazione Bruno Kessler
+# Copyright (c) 2022 @ FBK - Fondazione Bruno Kessler
 # Author: Roberto Doriguzzi-Corin
 # Project: LUCID: A Practical, Lightweight Deep Learning Solution for DDoS Attack Detection
 #
