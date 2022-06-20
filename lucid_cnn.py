@@ -282,6 +282,9 @@ def main(argv):
                     predict_file.flush()
                 except:
                     print("No packets received during the last time window.")
+            elif isinstance(cap, pyshark.FileCapture) == True:
+                print("\nNo more packets in file ", data_source)
+                break
 
         predict_file.close()
 
