@@ -387,9 +387,15 @@ def main(argv):
                 pt1 = time.time()
                 prediction_time = pt1 - pt0
 
-                [packets] = count_packets_in_dataset([X])
-                report_results(Y_true, Y_pred, packets, model_name_string,
-                               data_source, stats_file, prediction_time)
+                try:
+                    [packets] = count_packets_in_dataset([X])
+                    [packets] = count_packets_in_dataset([X])
+                    report_results(Y_true, Y_pred, packets, model_name_string, data_source, stats_file, prediction_time)
+                except:
+                    print("No packets received during the last time window.")
+            elif isinstance(cap, pyshark.FileCapture) == True:
+                print("\nNo more packets in file ", data_source)
+                break
 
 def report_results(Y_true, Y_pred,packets, model_name, dataset_filename, stats_file,prediction_time):
     ddos_rate = '{:04.3f}'.format(sum(Y_pred)/Y_pred.shape[0])
