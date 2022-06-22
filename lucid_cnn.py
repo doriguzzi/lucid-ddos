@@ -31,7 +31,6 @@ np.random.seed(SEED)
 rn.seed(SEED)
 config = tf.compat.v1.ConfigProto(inter_op_parallelism_threads=1)
 
-from matplotlib import pyplot
 from tensorflow.keras.optimizers import Adam,SGD
 from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Conv2D
 from tensorflow.keras.layers import Dropout, GlobalMaxPooling2D
@@ -50,13 +49,14 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 config.gpu_options.allow_growth = True  # dynamically grow the memory used on the GPU
 #config.log_device_placement = True  # to log device placement (on which device the operation ran)
 
-TRAINING_HEADER = ['Model', 'TIME(t)', 'ACC(t)', 'ERR(t)', 'ACC(v)', 'ERR(v)', 'Parameters']
+OUTPUT_FOLDER = "./output/"
+
 VAL_HEADER = ['Model', 'Samples', 'Accuracy', 'F1Score', 'Hyper-parameters','Validation Set']
 PREDICT_HEADER = ['Model', 'Time', 'Packets', 'Samples', 'DDOS%', 'Accuracy', 'F1Score', 'TPR', 'FPR','TNR', 'FNR', 'Source']
 
 # hyperparameters
-PATIENCE = 10
-DEFAULT_EPOCHS = 1000
+PATIENCE = 2
+DEFAULT_EPOCHS = 10
 hyperparamters = {
     "learning_rate": [0.1,0.01,0.001],
     "batch_size": [1024,2048],
@@ -125,6 +125,9 @@ def main(argv):
 
     args = parser.parse_args()
 
+    if os.path.isdir(OUTPUT_FOLDER) == False:
+        os.mkdir(OUTPUT_FOLDER)
+
     if args.train is not None:
         subfolders = glob.glob(args.train[0] +"/*/")
         if len(subfolders) == 0: # for the case in which the is only one folder, and this folder is args.dataset_folder[0]
@@ -155,7 +158,7 @@ def main(argv):
             rnd_search_cv = GridSearchCV(keras_classifier, hyperparamters, cv=3, return_train_score=True)
 
             es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=PATIENCE)
-            best_model_filename = dataset_folder + str(time_window) + 't-' + str(max_flow_len) + 'n-' + model_name
+            best_model_filename = OUTPUT_FOLDER + str(time_window) + 't-' + str(max_flow_len) + 'n-' + model_name
             mc = ModelCheckpoint(best_model_filename + '.h5', monitor='val_accuracy', mode='max', verbose=1, save_best_only=True)
             # With K-Fold cross-validation, the validation set is only used for early stopping
             rnd_search_cv.fit(X_train, Y_train, epochs=args.epochs, validation_data=(X_val, Y_val), callbacks=[es, mc, History()])
@@ -183,9 +186,7 @@ def main(argv):
             print("F1 Score of the best model on the validation set: ", f1_score_val)
 
     if args.predict is not None:
-        if os.path.isdir("./log") == False:
-            os.mkdir("./log")
-        predict_file = open('./log/predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a', newline='')
+        predict_file = open(OUTPUT_FOLDER + 'predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a', newline='')
         predict_file.truncate(0)  # clean the file content (as we open the file in append mode)
         predict_writer = csv.DictWriter(predict_file, fieldnames=PREDICT_HEADER)
         predict_writer.writeheader()
@@ -236,10 +237,7 @@ def main(argv):
         predict_file.close()
 
     if args.predict_live is not None:
-        if os.path.isdir("./log") == False:
-            os.mkdir("./log")
-
-        predict_file = open('./log/predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a', newline='')
+        predict_file = open(OUTPUT_FOLDER + 'predictions-' + time.strftime("%Y%m%d-%H%M%S") + '.csv', 'a', newline='')
         predict_file.truncate(0)  # clean the file content (as we open the file in append mode)
         predict_writer = csv.DictWriter(predict_file, fieldnames=PREDICT_HEADER)
         predict_writer.writeheader()

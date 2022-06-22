@@ -24,7 +24,7 @@ bash Miniconda3-latest-Linux-x86_64.sh
 Then create a new ```conda``` environment (called ```python39```) based on Python 3.9 and including part the required packages:
 
 ```
-conda create -n python39 python=3.9 numpy tensorflow=2.7.0 h5py lxml
+conda create -n python39 python=3.9
 ```
 
 Activate the new ```python39``` environment:
@@ -36,7 +36,7 @@ conda activate python39
 And finalise the installation with a few more packages:
 
 ```
-(python39)$ pip3 install pyshark sklearn
+(python39)$ pip3 install pyshark sklearn numpy tensorflow==2.7.0 h5py lxml
 ```
 
 Pyshark is just Python wrapper for tshark, allowing python packet parsing using wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS, use the following command:
@@ -156,7 +156,7 @@ To train LUCID, execute the following command:
 python3 lucid_cnn.py --train ./sample-dataset/
 ```
 
-This command trains LUCID over the grid of hyperparameters, maximum 1000 epochs for each point in the grid. The training process can stop earlier if no progress towards the minimum loss is observed for PATIENCE=10 consecutive epochs. The output is saved in a text file in the same folder containing the dataset. In that folder, the model that maximises the F1 score on the validation set is also saved in ```h5``` format, along with a ```csv``` file with the performance of the model.  The name of the two files is the same (except for the extension) and is in the following format:
+This command trains LUCID over the grid of hyperparameters, maximum 1000 epochs for each point in the grid. The training process can stop earlier if no progress towards the minimum loss is observed for PATIENCE=10 consecutive epochs. The model which maximises the accuracy on the validation set is saved in ```h5``` format in the ```output``` folder, along with a ```csv``` file with the performance of the model on the validation set.  The name of the two files is the same (except for the extension) and is in the following format:
 
 ```
 10t-10n-SYN2020-LUCID.h5
@@ -183,10 +183,10 @@ Testing means evaluating a trained model of LUCID with unseen data (data not use
 To test LUCID, run the following command:
 
 ```
-python3 lucid_cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5
+python3 lucid_cnn.py --predict ./sample-dataset/ --model ./output/10t-10n-SYN2020-LUCID.h5
 ```
 
-The output printed on the terminal and saved in a text file in the folder with the dataset. The output has the following format:
+The output printed on the terminal and saved in a text file in the ```output``` folder in the following format:
 
 |Model|Time|Packets|Samples|DDOS%|Accuracy|F1Score|TPR|FPR|TNR|FNR|Source|
 |-----|----|-------|-------|-----|--------|-------|---|---|---|---|------|
@@ -228,7 +228,7 @@ CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
 Of course, the above dictionary can be changed to meet the address scheme of the network where the experiments are executed. Alternatively, one can use the ```attack_net``` and ```victim_net``` options as follows:
 
 ```
-python3 lucid_cnn.py --predict_live ens3 --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --attack_net 11.0.0.0/24 --victim_net 10.42.0.0/24
+python3 lucid_cnn.py --predict_live eth0 --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --attack_net 11.0.0.0/24 --victim_net 10.42.0.0/24
 ```
 
 Once LUCID has been started on the victim machine using one of the two examples above, we can start the attack from another host machine using one of the following scripts based on the ```mausezahn``` tool (https://github.com/uweber/mausezahn):
