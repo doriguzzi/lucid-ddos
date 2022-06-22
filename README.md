@@ -21,22 +21,22 @@ In a Linux OS, execute the following command and follows the on-screen instructi
 bash Miniconda3-latest-Linux-x86_64.sh
 ```
 
-Then create a new ```conda``` environment (called ```python38```) based on Python 3.8 and including part the required packages:
+Then create a new ```conda``` environment (called ```python39```) based on Python 3.9 and including part the required packages:
 
 ```
-conda create -n python38 python=3.8 numpy tensorflow=2.3.0 h5py lxml
+conda create -n python39 python=3.9 numpy tensorflow=2.7.0 h5py lxml
 ```
 
-Activate the new ```python38``` environment:
+Activate the new ```python39``` environment:
 
 ```
-conda activate python38
+conda activate python39
 ```
 
 And finalise the installation with a few more packages:
 
 ```
-(python38)$ pip3 install pyshark sklearn
+(python39)$ pip3 install pyshark sklearn
 ```
 
 Pyshark is just Python wrapper for tshark, allowing python packet parsing using wireshark dissectors. This means that ```tshark``` must be also installed. On an Ubuntu-based OS, use the following command:
@@ -47,7 +47,7 @@ sudo apt install tshark
 
 Please note that the current LUCID code works with ```tshark``` **version 3.2.13 or lower**. Issues have been reported when using newest releases such as 3.4.X.
 
-For the sake of simplicity, we omit the command prompt ```(python38)$``` in the following example commands in this README.   ```(python38)$``` indicates that we are working inside the ```python38``` execution environment, which provides all the required libraries and tools. If the command prompt is not visible, re-activate the environment as explained above.
+For the sake of simplicity, we omit the command prompt ```(python39)$``` in the following example commands in this README.   ```(python39)$``` indicates that we are working inside the ```python39``` execution environment, which provides all the required libraries and tools. If the command prompt is not visible, re-activate the environment as explained above.
 
 ## Traffic pre-processing
 
@@ -123,12 +123,13 @@ All the output of the ```lucid_dataset_parser.py``` script is saved within the o
 
 The LUCID CNN is implemented in script ```lucid_cnn.py```. The script executes a grid search throughout a set of hyperparameters and saves the model that maximises the F1 score metric in ```h5``` format (hierarchical data format).
 
-At each point in the grid (each combination of hyperparameters), the training continues indefinitely and stops when the loss does not decrease for a consecutive 25 times. This value is defined with variable ```MAX_CONSECUTIVE_LOSS_INCREASE=25``` at the beginning of the script. Part of the hyperparameters is defined in the script as follows:
+At each point in the grid (each combination of hyperparameters), the training continues until the maximum number of epochs is reached or after the loss has not decreased for 10 consecutive times. This value is defined with variable ```PATIENCE=10``` at the beginning of the script. Part of the hyperparameters is defined in the script as follows:
 
-- **Learning rate**:  ```LR = [0.1,0.01,0.001]```
-- **Batch size**: ```BATCH_SIZE = [1024,2048]```
-- **Number of convolutional filters**: ```KERNELS = [1,2,4,8,16,32,64]```
-- **Height of the pooling kernel**: ```pool_height in ['min','max']```, where ```min=3``` and ```max``` is the total height of the output of one convolutional filter
+- **Learning rate**:  ```"learning_rate": [0.1,0.01,0.001],```
+- **Batch size**: ```"batch_size": [1024,2048]```
+- **Number of convolutional filters**: ```"kernels": [1,2,4,8,16,32,64]```
+- **Dropout**: ```"dropout" : [0.5,0.7,0.9]```
+- **L1 and L2 Regularization**: ```"regularization" : ['l1','l2']```
 
 Other two important hyperparameters must be specified during the first step of the data preprocessing (see above):
 
@@ -144,19 +145,18 @@ All these files can be stored into a single folder, or in multiple  subfolders. 
 To execute the training process, the following parameters can be specified when using ```lucid_cnn.py```:
 
 - ```-t```, ```--train```: Starts the training process and specifies the folder with the dataset
-- ```-e```, ```--epochs ```: Maximum number of training epochs for each set of hyperparameters. This option overrides the *early stopping* mechanism based on the loss trend described above
-- ```-r```, ```--regularization ```: Applies either *l1* or *l2* regularization to the convolutional layer's connection weights
-- ```-d```, ```--dropout ```: Applies *dropout* regularization to the convolutional layer's neurons.
+- ```-e```, ```--epochs ```: Maximum number of training epochs for each set of hyperparameters (default=1000). 
+
 
 ### The training process
 
 To train LUCID, execute the following command:
 
 ```
-python3 lucid_cnn.py --train ./sample-dataset/  --epochs 100 --regularization l2 --dropout 0.5
+python3 lucid_cnn.py --train ./sample-dataset/
 ```
 
-This command trains LUCID over the grid of hyperparameters, 100 epochs for each point in the grid. During the training, *l2* and *dropout* regularization methods are used, the latter with *dropout rate* equal to 50%. The output is saved in a text file in the same folder containing the dataset. In that folder, the model that maximises the F1 score on the validation set is also saved in ```h5``` format, along with a ```csv``` file with the performance of the model.  The name of the two files is the same (except for the extension) and is in the following format:
+This command trains LUCID over the grid of hyperparameters, maximum 1000 epochs for each point in the grid. The training process can stop earlier if no progress towards the minimum loss is observed for PATIENCE=10 consecutive epochs. The output is saved in a text file in the same folder containing the dataset. In that folder, the model that maximises the F1 score on the validation set is also saved in ```h5``` format, along with a ```csv``` file with the performance of the model.  The name of the two files is the same (except for the extension) and is in the following format:
 
 ```
 10t-10n-SYN2020-LUCID.h5
@@ -165,14 +165,12 @@ This command trains LUCID over the grid of hyperparameters, 100 epochs for each 
 
 Where the prefix 10t-10n indicates the values of hyperparameters ```time window``` and ```packets/sample``` that produced the best results in terms of F1 score on the validation set. The values of the other hyperparameters are reported in the ```csv``` file:
 
-```
-Model         TIME(sec) ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Parameters
-SYN2020-LUCID     0.078 1.0000 0.2634 1.0000 1.0000 1.0000 0.0000 1.0000 0.0000 lr=0.100,b=1024,n=010,t=010,k=001,h=(03,11),m=min
-```
+|Model|Samples|Accuracy|F1Score|Hyper-parameters|Validation Set|
+|-----|-------|--------|-------|----------------|--------------|
+|SYN2020-LUCID|317|0.9965|0.9964|{'batch_size': 2048, 'dropout': 0.5, 'kernels': 4, 'learning_rate': 0.1, 'regularization': 'l2'}|./sample-dataset/10t-10n-SYN2020-dataset-val.hdf5|
 
-along with prediction results obtained on the validation set, such as execution time (TIME), accuracy (ACC), loss (ERR), F1 score (F1), positive predictive value or precision (PPV), true positive rate (TPR), false positive rate (FPR), true negative rate (TNR) and false negative rate (FNR).
+along with prediction results obtained on the validation set, such as  accuracy and F1 score. The last column is the path to the validation set used to validate the best model.
 
-The hyperparameters are learning rate (lr), batch size (b), packet/sample (n), time window (t), number of convolutional filters (k), filter size (h), max pooling size (m).
 
 ## Testing
 
@@ -190,14 +188,13 @@ python3 lucid_cnn.py --predict ./sample-dataset/ --model ./sample-dataset/10t-10
 
 The output printed on the terminal and saved in a text file in the folder with the dataset. The output has the following format:
 
-```
-Model         TIME(sec) PACKETS SAMPLES DDOS% ACC    ERR    F1     PPV    TPR    FPR    TNR    FNR    Data Source
-SYN2020-LUCID     0.036 0001761 0000352 0.503 0.9915 0.2944 0.9915 0.9831 1.0000 0.0169 0.9831 0.0000 10t-10n-SYN2020-dataset-test.hdf5
-```
+|Model|Time|Packets|Samples|DDOS%|Accuracy|F1Score|TPR|FPR|TNR|FNR|Source|
+|-----|----|-------|-------|-----|--------|-------|---|---|---|---|------|
+|SYN2020-LUCID|0.018|1761|352|0.503|0.9914|0.9914|1.0|0.0169|0.9831|0.0|10t-10n-SYN2020-dataset-test.hdf5|
 
-Where ```TIME``` is the execution time on a test set.  The values of ```PACKETS``` and ```SAMPLES``` are the the total number of packets and samples in the test set respectively. More precisely, ```PACKETS``` is the total amount of packets represented in the samples (traffic flows) of the test set. ```ERR``` is the total loss on the test set (binary cross entropy),  ```ACC```, ```F1```, ```PPV```  are classification accuracy, F1 and precision scores respectively, ```TPR```, ```FPR```, ```TNR```, ```FNR``` are the true positive, false positive, true negative and false negative rates respectively. 
+Where ```Time``` is the execution time on a test set.  The values of ```Packet``` and ```Samples``` are the the total number of packets and samples in the test set respectively. More precisely, ```PACKETS``` is the total amount of packets represented in the samples (traffic flows) of the test set. ```Accuracy```, ```F1```, ```PPV```  are classification accuracy, F1 and precision scores respectively, ```TPR```, ```FPR```, ```TNR```, ```FNR``` are the true positive, false positive, true negative and false negative rates respectively. 
 
-The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output is formed by multiple lines, on for each test set. 
+The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output might consist of multiple lines, on for each test set. 
 
 ## Online Inference
 
