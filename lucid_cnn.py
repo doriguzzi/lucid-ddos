@@ -109,7 +109,7 @@ def main(argv):
                         help='Subnet of the victim (used to compute the detection accuracy)')
 
     parser.add_argument('-p', '--predict', nargs='?', type=str,
-                        help='Perform a prediction on pre-preocessed data')
+                        help='Perform a prediction on pre-preprocessed data')
 
     parser.add_argument('-pl', '--predict_live', nargs='?', type=str,
                         help='Perform a prediction on live traffic')

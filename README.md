@@ -228,7 +228,7 @@ CUSTOM_DDOS_SYN = {'attackers': ['11.0.0.' + str(x) for x in range(1,255)],
 Of course, the above dictionary can be changed to meet the address scheme of the network where the experiments are executed. Alternatively, one can use the ```attack_net``` and ```victim_net``` options as follows:
 
 ```
-python3 lucid_cnn.py --predict_live eth0 --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --attack_net 11.0.0.0/24 --victim_net 10.42.0.0/24
+python3 lucid_cnn.py --predict_live eth0 --model ./output/10t-10n-SYN2020-LUCID.h5 --attack_net 11.0.0.0/24 --victim_net 10.42.0.0/24
 ```
 
 Once LUCID has been started on the victim machine using one of the two examples above, we can start the attack from another host machine using one of the following scripts based on the ```mausezahn``` tool (https://github.com/uweber/mausezahn):
@@ -246,7 +246,7 @@ The output of LUCID on the victim machine will be similar to that reported in Se
 Similar to the previous case on live traffic, inference on a pre-recorded traffic trace can be started with command:
 
 ```
-python3 lucid_cnn.py --predict_live ./sample-dataset/dataset-chunk-syn.pcap --model ./sample-dataset/10t-10n-SYN2020-LUCID.h5 --dataset_type SYN2020
+python3 lucid_cnn.py --predict_live ./sample-dataset/dataset-chunk-syn.pcap --model ./output/10t-10n-SYN2020-LUCID.h5 --dataset_type SYN2020
 ```
 
 In this case, the argument of option ```predict_live``` must be the path to a pcap file. The script parses the file from the beginning to the end, printing the classification results every time the time window expires. The duration of the time window is automatically detected from the prefix of the model's name (e.g., ```10t``` indicates a 10-second time window). 
