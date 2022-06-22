@@ -291,10 +291,12 @@ def main(argv):
                 pt1 = time.time()
                 prediction_time = pt1 - pt0
 
-                [packets] = count_packets_in_dataset([X])
-                report_results(np.squeeze(Y_true), Y_pred, packets, model_name_string, data_source, prediction_time,predict_writer)
-                predict_file.flush()
-
+                try:
+                    [packets] = count_packets_in_dataset([X])
+                    [packets] = count_packets_in_dataset([X])
+                    report_results(Y_true, Y_pred, packets, model_name_string, data_source, stats_file, prediction_time)
+                except:
+                    print("No packets received during the last time window.")
             elif isinstance(cap, pyshark.FileCapture) == True:
                 print("\nNo more packets in file ", data_source)
                 break
