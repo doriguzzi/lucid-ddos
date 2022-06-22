@@ -55,8 +55,8 @@ VAL_HEADER = ['Model', 'Samples', 'Accuracy', 'F1Score', 'Hyper-parameters','Val
 PREDICT_HEADER = ['Model', 'Time', 'Packets', 'Samples', 'DDOS%', 'Accuracy', 'F1Score', 'TPR', 'FPR','TNR', 'FNR', 'Source']
 
 # hyperparameters
-PATIENCE = 2
-DEFAULT_EPOCHS = 10
+PATIENCE = 10
+DEFAULT_EPOCHS = 1000
 hyperparamters = {
     "learning_rate": [0.1,0.01,0.001],
     "batch_size": [1024,2048],
