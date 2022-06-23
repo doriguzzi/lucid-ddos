@@ -142,7 +142,7 @@ All the output of the ```lucid_dataset_parser.py``` script is saved within the o
 
 ## Training
 
-The LUCID CNN is implemented in script ```lucid_cnn.py```. The script executes a grid search throughout a set of hyperparameters and saves the model that maximises the F1 score metric in ```h5``` format (hierarchical data format).
+The LUCID CNN is implemented in script ```lucid_cnn.py```. The script executes a grid search throughout a set of hyperparameters and saves the model that maximises the accuracy on the validation set in ```h5``` format (hierarchical data format).
 
 At each point in the grid (each combination of hyperparameters), the training continues until the maximum number of epochs is reached or after the loss has not decreased for 10 consecutive times. This value is defined with variable ```PATIENCE=10``` at the beginning of the script. Part of the hyperparameters is defined in the script as follows:
 
@@ -166,7 +166,8 @@ All these files can be stored into a single folder, or in multiple  subfolders. 
 To execute the training process, the following parameters can be specified when using ```lucid_cnn.py```:
 
 - ```-t```, ```--train```: Starts the training process and specifies the folder with the dataset
-- ```-e```, ```--epochs ```: Maximum number of training epochs for each set of hyperparameters (default=1000). 
+- ```-e```, ```--epochs ```: Maximum number of training epochs for each set of hyperparameters (default=1000)
+- ```-cv```,```--cross_validation```: Number of folds used to split the training data for cross-validation (accepted values: 0,2,3, etc., 0 is the default value that means no cross-validation). 
 
 
 ### The training process

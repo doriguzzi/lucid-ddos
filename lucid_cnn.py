@@ -34,10 +34,10 @@ config = tf.compat.v1.ConfigProto(inter_op_parallelism_threads=1)
 from tensorflow.keras.optimizers import Adam,SGD
 from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Conv2D
 from tensorflow.keras.layers import Dropout, GlobalMaxPooling2D
-from tensorflow.keras.models import Model, Sequential, save_model, load_model, clone_model
-from sklearn.metrics import classification_report, f1_score, precision_score, recall_score, roc_auc_score,accuracy_score,mean_squared_error, log_loss, confusion_matrix
+from tensorflow.keras.models import Model, Sequential, load_model, save_model
+from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.utils import shuffle
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, History
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.wrappers.scikit_learn import KerasClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from lucid_dataset_parser import *
@@ -102,6 +102,9 @@ def main(argv):
     parser.add_argument('-e', '--epochs', default=DEFAULT_EPOCHS, type=int,
                         help='Training iterations')
 
+    parser.add_argument('-cv', '--cross_validation', default=0, type=int,
+                        help='Number of folds for cross-validation (default 0)')
+
     parser.add_argument('-a', '--attack_net', default=None, type=str,
                         help='Subnet of the attacker (used to compute the detection accuracy)')
 
@@ -155,21 +158,30 @@ def main(argv):
 
             model_name = dataset_name + "-LUCID"
             keras_classifier = KerasClassifier(build_fn=Conv2DModel,model_name=model_name, input_shape=X_train.shape[1:],kernel_col=X_train.shape[2])
-            rnd_search_cv = GridSearchCV(keras_classifier, hyperparamters, cv=3, return_train_score=True)
+            rnd_search_cv = GridSearchCV(keras_classifier, hyperparamters, cv=args.cross_validation if args.cross_validation > 1 else [(slice(None), slice(None))], refit=True, return_train_score=True)
 
             es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=PATIENCE)
             best_model_filename = OUTPUT_FOLDER + str(time_window) + 't-' + str(max_flow_len) + 'n-' + model_name
             mc = ModelCheckpoint(best_model_filename + '.h5', monitor='val_accuracy', mode='max', verbose=1, save_best_only=True)
             # With K-Fold cross-validation, the validation set is only used for early stopping
-            rnd_search_cv.fit(X_train, Y_train, epochs=args.epochs, validation_data=(X_val, Y_val), callbacks=[es, mc, History()])
+            rnd_search_cv.fit(X_train, Y_train, epochs=args.epochs, validation_data=(X_val, Y_val), callbacks=[es, mc])
 
+            # With refit=True (default) GridSearchCV refits the model on the whole training set (no folds) with the best
+            # hyper-parameters and makes the resulting model available as rnd_search_cv.best_estimator_.model
             best_model = rnd_search_cv.best_estimator_.model
+
+            # We overwrite the checkpoint models with the one trained on the whole training set (not only k-1 folds)
+            best_model.save(best_model_filename + '.h5')
+
+            # Alternatively, to save time, one could set refit=False and load the best model from the filesystem to test its performance
+            #best_model = load_model(best_model_filename + '.h5')
+
             Y_pred_val = (best_model.predict(X_val) > 0.5)
             Y_true_val = Y_val.reshape((Y_val.shape[0], 1))
             f1_score_val = f1_score(Y_true_val, Y_pred_val)
             accuracy = accuracy_score(Y_true_val, Y_pred_val)
 
-            # save best model perdormance on the validation set
+            # save best model performance on the validation set
             val_file = open(best_model_filename + '.csv', 'w', newline='')
             val_file.truncate(0)  # clean the file content (as we open the file in append mode)
             val_writer = csv.DictWriter(val_file, fieldnames=VAL_HEADER)
