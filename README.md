@@ -213,7 +213,7 @@ The output printed on the terminal and saved in a text file in the ```output``` 
 |-----|----|-------|-------|-----|--------|-------|---|---|---|---|------|
 |SYN2020-LUCID|0.018|1761|352|0.503|0.9914|0.9914|1.0|0.0169|0.9831|0.0|10t-10n-SYN2020-dataset-test.hdf5|
 
-Where ```Time``` is the execution time on a test set.  The values of ```Packet``` and ```Samples``` are the the total number of packets and samples in the test set respectively. More precisely, ```PACKETS``` is the total amount of packets represented in the samples (traffic flows) of the test set. ```Accuracy```, ```F1```, ```PPV```  are classification accuracy, F1 and precision scores respectively, ```TPR```, ```FPR```, ```TNR```, ```FNR``` are the true positive, false positive, true negative and false negative rates respectively. 
+Where ```Time``` is the execution time on a test set.  The values of ```Packets``` and ```Samples``` are the the total number of packets and samples in the test set respectively. More precisely, ```Packets``` is the total amount of packets represented in the samples (traffic flows) of the test set. ```Accuracy```, ```F1```, ```PPV```  are classification accuracy, F1 and precision scores respectively, ```TPR```, ```FPR```, ```TNR```, ```FNR``` are the true positive, false positive, true negative and false negative rates respectively. 
 
 The last column indicates the name of the test set used for the prediction test. Note that the script loads and process all the test sets in the folder specified with option ``` --predict``` (identified with the suffix ```test.hdf5```). This means that the output might consist of multiple lines, on for each test set. 
 
