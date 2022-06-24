@@ -27,7 +27,7 @@ Similarly, in Mac OS:
 bash Miniconda3-latest-MacOSX-arm64.sh
 ```
 
-Then create a new ```conda``` environment (called ```python39```) based on Python 3.9 and including part the required packages:
+Then create a new ```conda``` environment (called ```python39```) based on Python 3.9:
 
 ```
 conda create -n python39 python=3.9
