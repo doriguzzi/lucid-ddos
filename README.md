@@ -284,7 +284,7 @@ If you are using LUCID's code for a scientific research, please cite the related
 
 
 
-This work has been partially funded by the European Union’s Horizon 2020 Research and Innovation Programme under grant agreements no. 815141 (DECENTER project) and n. 833685 (SPIDER project).
+This work has been partially funded by the European Union’s Horizon 2020 Research and Innovation Programme under grant agreements no. 815141 (DECENTER project), 830929 (CyberSec4Europe project) and n. 833685 (SPIDER project).
 
 ## License
 
