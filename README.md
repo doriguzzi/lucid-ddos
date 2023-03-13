@@ -66,7 +66,7 @@ Pyshark is just Python wrapper for tshark, allowing python packet parsing using 
 sudo apt install tshark
 ```
 
-Please note that the current LUCID code works with ```tshark``` **version 3.2.13 or lower**. Issues have been reported when using newest releases such as 3.4.X.
+Please note that the current LUCID code works with ```tshark``` **version 3.2.13 or lower**. Issues have been reported when using newer releases such as 3.4.X.
 
 For the sake of simplicity, we omit the command prompt ```(python39)$``` in the following example commands in this README.   ```(python39)$``` indicates that we are working inside the ```python39``` execution environment, which provides all the required libraries and tools. If the command prompt is not visible, re-activate the environment as explained above.
 
@@ -284,7 +284,7 @@ If you are using LUCID's code for a scientific research, please cite the related
 
 
 
-This work has been partially funded by the European Union’s Horizon 2020 Research and Innovation Programme under grant agreements no. 815141 (DECENTER project) and n. 833685 (SPIDER project).
+This work has been partially funded by the European Union’s Horizon 2020 Research and Innovation Programme under grant agreements no. 815141 (DECENTER project), 830929 (CyberSec4Europe project) and n. 833685 (SPIDER project).
 
 ## License
 
