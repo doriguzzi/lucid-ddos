@@ -55,7 +55,7 @@ On the new Apple's computers with M1 CPU, execute instead:
 And finalise the installation with a few more packages:
 
 ```
-(python39)$ pip3 install pyshark sklearn numpy h5py lxml
+(python39)$ pip3 install pyshark scikit-learn numpy h5py lxml
 ```
 
 
