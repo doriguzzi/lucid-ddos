@@ -58,11 +58,11 @@ PREDICT_HEADER = ['Model', 'Time', 'Packets', 'Samples', 'DDOS%', 'Accuracy', 'F
 PATIENCE = 10
 DEFAULT_EPOCHS = 1000
 hyperparamters = {
-    "learning_rate": [0.1,0.01,0.001],
+    "learning_rate": [0.1,0.01],
     "batch_size": [1024,2048],
-    "kernels": [1,2,4,8,16,32,64],
-    "regularization" : ['l1','l2'],
-    "dropout" : [0.5,0.7,0.9]
+    "kernels": [32,64],
+    "regularization" : [None,'l1'],
+    "dropout" : [None,0.2]
 }
 
 def Conv2DModel(model_name,input_shape,kernel_col, kernels=64,kernel_rows=3,learning_rate=0.01,regularization=None,dropout=None):
