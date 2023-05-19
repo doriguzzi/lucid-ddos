@@ -265,7 +265,7 @@ The output of LUCID on the victim machine will be similar to that reported in Se
 
 ## Acknowledgements
 
-If you are using LUCID's code for a scientific research, please cite the related paper in your manuscript as follows:
+If you are using LUCID's code for scientific research, please cite the related paper in your manuscript as follows:
 
 *R. Doriguzzi-Corin, S. Millar, S. Scott-Hayward, J. Martínez-del-Rincón and D. Siracusa, "Lucid: A Practical, Lightweight Deep Learning Solution for DDoS Attack Detection," in IEEE Transactions on Network and Service Management, vol. 17, no. 2, pp. 876-889, June 2020, doi: 10.1109/TNSM.2020.2971776.*
 
