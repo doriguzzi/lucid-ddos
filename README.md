@@ -223,7 +223,7 @@ Online inference can be started by executing ```lucid_cnn.py``` followed by one 
 If the argument of ```predict_live``` option is a network interface, LUCID will sniff the network traffic from that interface and will return the classification results every time the time window expires. The duration of the time window is automatically detected from the prefix of the model's name (e.g., ```10t``` indicates a 10-second time window). To start the inference on live traffic, use the following command:
 
 ```
-python3 lucid_cnn.py --predict_live eth0 --model ./sample-dataset/10t-10n-DOS2019-LUCID.h5 --dataset_type DOS2019
+python3 lucid_cnn.py --predict_live eth0 --model ./output/10t-10n-DOS2019-LUCID.h5 --dataset_type DOS2019
 ```
 
 Where ```eth0``` is the name of the network interface, while ```dataset_type``` indicates the address scheme of the traffic. This is optional and, as written above, it is only used to obtain the ground truth labels needed to compute the classification accuracy.
