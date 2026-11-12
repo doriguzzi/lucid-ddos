@@ -1,0 +1,14 @@
+# Ignore local demo token file
+.demo_token
+config/demo_token.txt
+demo_token.txt
+
+# Python and env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor
+*.code-workspace
+.vscode/

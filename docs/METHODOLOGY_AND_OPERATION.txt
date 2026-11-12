@@ -1,0 +1,138 @@
+LUCID DDoS Detection Web System — Methodology and System Operation
+=================================================================
+
+Overview
+--------
+This project turns the LUCID research prototype (a lightweight CNN for DDoS detection) into a practical web-based system for live monitoring, detection, forecasting, and basic mitigation. It supports three ingestion modes (live interface, PCAP replay, external HTTP ingest) and visualizes results in a real-time dashboard.
+
+Methodology
+-----------
+1) Problem framing
+- Goal: Detect DDoS activity online with low overhead and fast time-to-detect (TTD), suitable for resource-constrained environments.
+- Approach: Train a compact 1D CNN to classify traffic behavior over short, fixed “time windows.” Each window aggregates many per-flow fragments (subflows) and yields a per-window anomaly score (ddos_fraction).
+
+2) Data model and features
+- Flows: Bidirectional 5-tuple (srcIP, srcPort, dstIP, dstPort, protocol).
+- Windowing: Traffic is segmented into fixed tumbling windows of length t seconds (e.g., t=10s). Each flow contributes up to n packets per window (e.g., n=10).
+- Fragments: For each flow-window pair, extract a sequence of features per packet, then pad/truncate to length n. Typical features include: time deltas, destination port, protocol number, packet length, direction flag. Values are normalized to [0, 1].
+- Rationale: This mirrors how online systems see traffic (partial flows over short time intervals) and makes the dataset-agnostic.
+
+3) Dataset preparation
+- Input: pcap files with known ground truth (e.g., CIC-IDS2017, CSE-CIC-IDS2018, CIC-DDoS2019) or custom captures with specified attacker/victim ranges.
+- Steps: (a) parse packets with pyshark/tshark, (b) group by flow and window, (c) label benign vs DDoS, (d) balance classes, (e) split into train/val/test, (f) normalize and pad, (g) write HDF5 datasets.
+- Output: Multiple dataset variants parameterized by (t, n), e.g., 10t-10n.
+
+4) Model and training
+- Architecture: Lightweight 1D CNN over packet sequences, with small kernel sizes, limited filters, optional dropout and L1/L2 regularization.
+- Selection: Grid-search over hyperparameters (learning rate, batch size, kernels, regularization, dropout). Early stopping on validation loss (patience) selects the best model.
+- Artifact: Best model saved to .h5 with name prefix encoding the chosen (t, n), e.g., 10t-10n-DOS2019-LUCID.h5, allowing the runtime to auto-infer operating window and max packets.
+
+5) Online inference
+- Window cycle: For each time window, aggregate fragments, build a tensor [num_flows, n, feature_dim], normalize/pad, run the CNN, and obtain per-fragment DDoS probabilities.
+- Window score: Compute ddos_fraction = fraction of fragments in the window predicted as DDoS.
+- Decision: Compare ddos_fraction to a configurable threshold (e.g., 0.5). Apply hysteresis across consecutive windows to stabilize alerts.
+
+6) Forecasting and uncertainty
+- Forecast: EWMA (exponential weighted moving average) over recent ddos_fraction values provides a short-horizon trend forecast.
+- Uncertainty band: A Wilson score/interval approximation conveys confidence around the forecast.
+
+7) Metrics and KPIs
+- TPR (True Positive Rate): fraction of actual attack windows correctly flagged.
+- FPR (False Positive Rate): fraction of benign windows incorrectly flagged.
+- TTD (Time-To-Detect): time from the onset of an attack window to first detection, measured in window multiples (e.g., 1 window = ~t seconds).
+- Counts: TP/FP/TN/FN tracked to compute rates; the system reports the “KPI source” (dataset vs HTTP labels vs overrides) for interpretability.
+- Prevented downtime: a simple estimate of avoided attack time given timely detection.
+
+8) Mitigation strategy (simulated)
+- Hysteresis: Alerts require consistent breach across windows to reduce noise.
+- Stages: Monitor → Rate-limit → Blackhole, with cooldown timers.
+- Allowlist: Critical IPs can be excluded from automatic actions.
+- Goal: Demonstrate closed-loop response; production deployments would integrate with firewalls/load balancers.
+
+System Operation
+----------------
+A) Architecture components
+- Backend API (FastAPI):
+  - POST /api/start — start a run (choose source type, model, threshold, dataset/ground-truth options)
+  - POST /api/stop — stop immediately; responsive in HTTP ingest mode via queue sentinel
+  - GET /api/status — current state and KPIs
+  - GET /api/history — recent window results
+  - POST /api/mitigation — staged mitigation and allowlist management
+  - POST /api/ingest — external HTTP ingest (push fragments, optional labels)
+  - GET /api/interfaces — list capture interfaces via tshark -D
+- WebSocket /ws: Broadcasts window results to the dashboard.
+- Ingestion adapters:
+  - Live capture: pyshark LiveCapture (tshark/Npcap on Windows)
+  - PCAP replay: pyshark FileCapture
+  - External HTTP: in-memory queue drained each window
+- DetectorService: Background loop orchestrating ingest → features → inference → KPIs/forecast → mitigation → broadcast.
+- Frontend dashboard: Static HTML/JS/CSS with Chart.js charts, controls (Start/Stop, source select, threshold, mitigation).
+
+B) Run sequence
+1. Start
+- Validate inputs; open the selected source (interface/pcap/HTTP).
+- Infer (t, n) from model filename prefix, or use defaults (10s, 10 packets).
+- Reset internal state (KPIs, forecast buffers, mitigation stage, histories).
+- Determine KPI source: dataset type / HTTP labels / ground-truth override.
+- Launch the DetectorService loop in a worker thread.
+
+2. Per-window processing
+- Ingest: Collect fragments until the window ends (or drain HTTP queue).
+- Metrics: Compute flow density, unique destination ports, source IP diversity, packet volume.
+- Inference: Build normalized tensor, run CNN, get per-fragment probabilities.
+- Window score: Compute ddos_fraction and apply threshold/hysteresis.
+- KPIs: If ground truth is available, update TP/FP/TN/FN and TPR/FPR; compute TTD in window units.
+- Forecast: Update EWMA and uncertainty estimates.
+- Mitigation: Escalate/de-escalate stage with cooldown; respect allowlist.
+- Broadcast: Send results over WebSocket and update history/status.
+
+3. Stop
+- Set stop event; close capture handles; join worker.
+- HTTP mode uses a queue sentinel to exit promptly (responsive Stop).
+
+C) Data flow (logical)
+[Sources: Interface | PCAP | HTTP] -> Ingest Queue -> Window Builder -> Feature Tensor -> CNN Inference -> ddos_fraction -> Threshold/Hysteresis -> Alert/Mitigation -> WebSocket/REST -> Dashboard
+
+D) Error handling and resilience
+- Empty windows are handled gracefully (no division by zero, no bogus KPIs).
+- Live capture errors include actionable tips (tshark presence, permissions, interface choice).
+- Interface scan (/api/interfaces) aids selection and avoids extcap pitfalls (e.g., sshdump).
+- Backoff/guards prevent UI freezes; broadcast is decoupled via WebSocket.
+
+E) Security and permissions
+- Live capture relies on tshark/dumpcap capabilities (Npcap on Windows). Prefer least-privilege setup; otherwise run as Administrator.
+- The API binds to localhost by default; change host only when intended and with firewall rules in place.
+- Allowlist prevents auto-blocking of critical IPs in simulated mitigation.
+
+F) Performance characteristics
+- Window-level batching reduces overhead; per-window CNN inference is fast on CPU for small models.
+- The dashboard is lightweight and updates once per window; no heavy polling.
+- Forecasting is constant-time per update.
+
+G) Extensibility
+- Add new ingest adapters (e.g., Kafka), storage backends, or model variants.
+- Swap/extend features and normalization in util_functions.py and preprocessing pipeline.
+- Integrate real mitigation (firewall, WAF, scrubbing) via provider SDKs.
+
+How to use (brief)
+------------------
+1) Train a model with lucid_cnn.py or use a provided .h5; ensure filename encodes (t, n) like 10t-10n-*.h5.
+2) Start the web server (e.g., uvicorn app.main:app) and open the dashboard.
+3) Choose a source:
+   - Interface: pick from the scan list (requires tshark) and click Start.
+   - PCAP: enter a path to a .pcap and click Start.
+   - HTTP: choose External HTTP ingest, click Start, then POST fragments to /api/ingest.
+4) Watch charts: ddos_fraction, flow density, dest ports, source diversity; alerts appear when threshold is exceeded.
+5) Review KPIs (TPR/FPR/TTD) when ground truth is available (dataset type, labels, or override).
+6) Use mitigation controls to simulate blocking; Stop ends the run immediately (especially responsive in HTTP mode).
+
+Glossary
+--------
+- Window (t): Fixed interval (seconds) over which flows are aggregated and scored.
+- Max packets (n): Per-flow cap on packets considered in the window; sequences are padded/truncated to n.
+- Fragment: The per-flow sequence for a single window (n x feature_dim).
+- ddos_fraction: Fraction of fragments in a window classified as DDoS (0.0–1.0).
+- Ground truth: Actual state of each window (Benign/Attack) from dataset labels, HTTP labels, or user override.
+- TTD: Time-to-detect in multiples of the window length (lower is better).
+
+End of document.

@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import sys
+import os
+from datetime import datetime, timezone
 import time
 import pyshark
 import socket
@@ -107,12 +109,51 @@ def parse_labels(dataset_type=None, attackers=None,victims=None, label=1):
 
     return output_dict
 
+# Robustly extract packet timestamp as epoch seconds across pyshark variants/OSes
+def packet_epoch_seconds(pkt) -> float:
+    # 1) Prefer explicit epoch fields
+    for val in (
+        getattr(getattr(pkt, "frame_info", None), "time_epoch", None),
+        getattr(pkt, "sniff_timestamp", None),
+    ):
+        if val is not None:
+            # Fast-path numeric strings/ints, skip obvious ISO-like strings
+            try:
+                s = str(val).strip()
+                # numeric pattern only (e.g., 1699301234.123456)
+                if s and all(c in "0123456789.+-eE" for c in s) and not ("-" in s and ":" in s):
+                    return float(s)
+            except Exception:
+                pass
+    # 2) Avoid accessing pkt.sniff_time on some pyshark versions (property may try float() on ISO strings)
+    # We'll rely on ISO parsing below instead of sniff_time to prevent ValueError propagation.
+    # 3) ISO-8601 strings possibly ending with 'Z' and 9-digit fractional seconds
+    for iso in (
+        getattr(pkt, "sniff_timestamp", None),
+        getattr(getattr(pkt, "frame_info", None), "time", None),
+    ):
+        if isinstance(iso, str) and iso:
+            s = iso.strip().replace("Z", "+00:00")
+            if "." in s:
+                head, tail = s.split(".", 1)
+                digits = "".join(ch for ch in tail if ch.isdigit())
+                zone = tail[len(digits):]
+                # normalize to microseconds (6 digits)
+                frac = (digits + "000000")[:6]
+                s = f"{head}.{frac}{zone}"
+            try:
+                return datetime.fromisoformat(s).timestamp()
+            except Exception:
+                continue
+    # As a last resort, use monotonic now (shouldn't happen)
+    return float(time.time())
+
 def parse_packet(pkt):
     pf = packet_features()
     tmp_id = [0,0,0,0,0]
 
     try:
-        pf.features_list.append(float(pkt.sniff_timestamp))  # timestampchild.find('Tag').text
+        pf.features_list.append(packet_epoch_seconds(pkt))  # timestamp in epoch seconds
         pf.features_list.append(int(pkt.ip.len))  # packet length
         pf.features_list.append(int(hashlib.sha256(str(pkt.highest_layer).encode('utf-8')).hexdigest(),
                                     16) % 10 ** 8)  # highest layer in the packet
@@ -174,8 +215,9 @@ def process_pcap(pcap_file,dataset_type,in_labels,max_flow_len,labelled_flows,ma
             print(pcap_name + " packet #", i)
 
         # start_time_window is used to group packets/flows captured in a time-window
-        if start_time_window == -1 or float(pkt.sniff_timestamp) > start_time_window + time_window:
-            start_time_window = float(pkt.sniff_timestamp)
+        ts = packet_epoch_seconds(pkt)
+        if start_time_window == -1 or ts > start_time_window + time_window:
+            start_time_window = ts
 
         pf = parse_packet(pkt)
         store_packet(pf, temp_dict, start_time_window, max_flow_len)
@@ -186,30 +228,84 @@ def process_pcap(pcap_file,dataset_type,in_labels,max_flow_len,labelled_flows,ma
     print('Completed file {} in {} seconds.'.format(pcap_name, time.time() - start_time))
 
 # Transforms live traffic into input samples for inference
-def process_live_traffic(cap, dataset_type, in_labels, max_flow_len, traffic_type='all',time_window=TIME_WINDOW):
-    start_time = time.time()
+def process_live_traffic(cap, dataset_type, in_labels, max_flow_len, traffic_type='all', time_window=TIME_WINDOW):
+    """Extract one window of traffic from a live interface or a PCAP.
+    - LiveCapture: window uses wall-clock duration (time_window seconds).
+    - FileCapture: window uses PCAP packet timestamps so we advance through the file
+      window-by-window instead of consuming the whole file in the first wall-clock window.
+    Returns a list of labelled flows for the window.
+    """
     temp_dict = OrderedDict()
     labelled_flows = []
 
-    start_time_window = start_time
-    time_window = start_time_window + time_window
+    window_len = float(time_window)
 
     if isinstance(cap, pyshark.LiveCapture) == True:
+        start_time_window = time.time()
+        deadline = start_time_window + window_len
         for pkt in cap.sniff_continuously():
-            if time.time() >= time_window:
+            if time.time() >= deadline:
                 break
             pf = parse_packet(pkt)
             temp_dict = store_packet(pf, temp_dict, start_time_window, max_flow_len)
     elif isinstance(cap, pyshark.FileCapture) == True:
-        while time.time() < time_window:
-            try:
-                pkt = cap.next()
-                pf = parse_packet(pkt)
-                temp_dict = store_packet(pf,temp_dict,start_time_window,max_flow_len)
-            except:
-                break
+        window_start = None
+        window_end = None
+        _eof = False
 
-    apply_labels(temp_dict,labelled_flows, in_labels,traffic_type)
+        # Helper to read next packet, honoring a one-packet carry-over buffer
+        def next_pkt():
+            buf = getattr(cap, "_lucid_buf", None)
+            if buf is not None:
+                try:
+                    setattr(cap, "_lucid_buf", None)
+                except Exception:
+                    pass
+                return buf, False
+            try:
+                return cap.next(), False
+            except StopIteration:
+                # True EOF
+                return None, True
+            except Exception as exc:
+                # Not EOF: record error so caller can surface it; do NOT mark EOF here
+                try:
+                    setattr(cap, "_lucid_error", str(exc))
+                except Exception:
+                    pass
+                return None, False
+
+        while True:
+            pkt, eof = next_pkt()
+            if pkt is None:
+                _eof = eof
+                break
+            try:
+                ts = packet_epoch_seconds(pkt)
+            except Exception:
+                ts = None
+            if window_start is None:
+                # First packet defines the start of this window in PCAP time
+                window_start = ts if ts is not None else 0.0
+                window_end = window_start + window_len
+            # Stop if this packet falls beyond the current window; it will be consumed
+            # and not included in this window. Losing one boundary packet is acceptable
+            # for streaming playback.
+            if ts is not None and window_end is not None and ts >= window_end:
+                # Carry this boundary packet into next window
+                try:
+                    setattr(cap, "_lucid_buf", pkt)
+                except Exception:
+                    pass
+                break
+            pf = parse_packet(pkt)
+            temp_dict = store_packet(pf, temp_dict, window_start, max_flow_len)
+        try:
+            setattr(cap, "_lucid_eof", bool(_eof))
+        except Exception:
+            pass
+
+    apply_labels(temp_dict, labelled_flows, in_labels, traffic_type)
     return labelled_flows
 
 def store_packet(pf,temp_dict,start_time_window, max_flow_len):

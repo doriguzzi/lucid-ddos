@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LUCID DDoS Dashboard</title>
+  <meta http-equiv="Expires" content="0" />
+  <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/styles.css?v=20251103-2" />
+  <style>
+    body {
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial;
+      background: #f9fafb;
+      color: #1f2937;
+      margin: 0;
+      transition: background .2s, color .2s;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 22px; }
+    header { background: #ffffff; border-bottom: 2px solid #e5e7eb; }
+    h1 { font-size: 1.67em; margin-bottom: 0; }
+    .card {
+      background: #fff;
+      border-radius: 0.95em;
+      box-shadow: 0 8px 30px rgba(40,54,110,.09);
+      margin-bottom: 19px;
+      padding: 20px;
+      transition: box-shadow .16s;
+      border: 1.2px solid #e5e7eb;
+    }
+    .card:hover { box-shadow: 0 15px 34px rgba(40,54,110,0.19);}
+    .chip { background:#e5e7eb; color:#656e7a; border-radius:999px; font-size:.87em; padding:3px 8px;}
+    .status-pill {
+      background:#10b981; color:#fff;
+      border-radius:999px; padding:3px 12px; margin-left:6px; font-size:.98em;
+      font-weight:500;
+      display:inline-block;
+      min-width:60px;
+      text-align:center;
+    }
+    .status-pill.idle { background:#6b7280; }
+    .status-pill.error { background:#e11d48; }
+    .banner, .banner-alert {
+      background: #ffe5e9;
+      border-left: 8px solid #e11d48;
+      color: #1f2937;
+      animation: fadeIn 0.6s ease, pulse 2.2s infinite;
+      font-weight: 600;
+      padding: 13px 20px;
+      border-radius: .7em;
+      margin-bottom:14px;
+      margin-top:2px;
+    }
+    .banner.hidden, .banner-alert.hidden { display: none; }
+    .banner-alert { background: #fdf2f8; border-left-color: #ef4444; color: #991b1b;}
+    @keyframes fadeIn { from{ opacity:0;} to{ opacity:1;} }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 #e11d4832;}
+      70% { box-shadow: 0 0 15px 7px #e11d480c;}
+      100% { box-shadow: 0 0 0 0 #e11d4832;}
+    }
+    button {
+      padding: 10px 20px; border-radius: 8px; border: none;
+      background: #3b82f6; color: #fff; 
+      box-shadow: 0 2px 5px rgba(59,130,246,0.10);
+      cursor:pointer; font-weight:500; font-size:1em;
+      transition: background .18s, box-shadow .18s;
+    }
+    button.secondary { background: #6b7280; }
+    button:active { box-shadow: 0 2px 8px #2563eb19;}
+    input, select, textarea {
+      padding: 8px 12px; border-radius: 7px;
+      border: 1.2px solid #d1d5db;
+      background: #fff; color: #1f2937;
+      font-size:1em;
+    }
+    .form-row { display: flex; align-items: center; gap: 14px; margin-bottom: 17px; }
+    .form-row label { min-width: 135px; font-weight: 500; }
+    .buttons { display: flex; gap: 16px; }
+    .muted { color: #6b7280;}
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius:50%; margin-right:3px;}
+    /* Color for mitigation stages */
+    .dot.rate-limit { background:#f59e0b;}
+    .dot.blackhole  { background:#e11d48;}
+    .dot.monitor    { background:#5eead4;}
+    .badge { background: #d1fae5; color:#116244; padding:4px 12px; border-radius:999px;}
+    .footer { color: #6b7280; margin-top: 2.5em; font-size: .98em; text-align:center; }
+    /* Responsive tweaks */
+    @media (max-width:700px){.container{padding:7px;} .card{padding:10px;}h1{font-size:1.13em;} main.container{padding-top:15px;}}
+    /* Tooltips */
+    [data-tooltip]:hover:after {
+      content: attr(data-tooltip);
+      position: absolute;
+      background: #111827; color: #fff;
+      padding: 5px 14px; border-radius: 7px; font-size: .98em;
+      top: 2em; left: 0; z-index: 99; box-shadow: 0 2px 12px #13192a24;
+      opacity: .9;
+    }
+    /* Dark theme */
+    body.theme-dark { background: #0b1220; color: #e5e7eb;}
+    body.theme-dark .card { background: #161e2e; box-shadow: 0 8px 36px rgba(40,54,110,.28);}
+    body.theme-dark header {background: #13192a; border-color: #2d334e;}
+    body.theme-dark .banner, body.theme-dark .banner-alert {background:#1f2937; color:#ef4444;}
+    body.theme-dark .chip, body.theme-dark .badge {background:#1f2937; color:#90cdf4;}
+    body.theme-dark input, body.theme-dark select, body.theme-dark textarea { background: #1f2937; border-color: #374151; color: #e5e7eb; }
+  </style>
+</head>
+<body class="theme-light">
+  <header>
+    <div class="container" style="display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 22px;">
+      <div>
+        <h1 style="margin: 0; display: flex; align-items: center; gap: 9px;">
+          LUCID DDoS Detector <span class="chip" title="UI build version">UI v2025.11.03.2</span>
+        </h1>
+        <div id="status" style="margin-top: 4px;">
+          Status: <span id="statusIcon" style="font-size:1.3em;">🟢</span>
+          <span id="statusText">loading...</span>
+          <span id="statusPill" class="status-pill">-</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div id="authBox" style="display: none; align-items: center; gap: 6px;">
+          <span id="authStatus" class="muted">Logged in</span>
+          <button id="logoutBtn" class="secondary" title="Logout">Logout</button>
+        </div>
+        <button id="themeToggle" class="secondary" title="Toggle light/dark" aria-label="Toggle theme" style="font-size: 18px; line-height: 1; padding: 8px;">
+          🌙
+        </button>
+      </div>
+    </div>
+    <div class="container" style="padding: 0 16px 8px;">
+      <div id="statusError" class="banner hidden"></div>
+      <div id="kpis" style="display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.97em; color: #4b5563; margin-top: 8px;">
+        <span>TPR: <strong id="kpiTPR" data-tooltip="True Positive Rate">-</strong></span>
+        <span>FPR: <strong id="kpiFPR" data-tooltip="False Positive Rate">-</strong></span>
+        <span>TTD (s): <strong id="kpiTTD" data-tooltip="Time To Detection (seconds)">-</strong></span>
+        <span>Prevented downtime (min): <strong id="kpiPD">0</strong></span>
+        <span>Counts: <strong id="kpiCounts">TP=0 FP=0 TN=0 FN=0</strong></span>
+        <span>Source: <strong id="kpiSrc">-</strong></span>
+      </div>
+    </div>
+  </header>
+  <main class="container" style="padding-top: 32px;">
+    <!-- Controls Panel -->
+    <section class="controls card">
+      <h2 style="margin-top: 0; font-size: 1.26em;">Start Monitoring</h2>
+      <form style="display: grid; gap: 18px;">
+        <div class="form-row">
+          <label>Source type:</label>
+          <select id="sourceKind">
+            <option value="iface">Network Interface</option>
+            <option value="pcap">PCAP File</option>
+            <option value="http">External HTTP Ingest</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Source (iface or .pcap):</label>
+          <input id="source" placeholder="eth0 or /path/to/file.pcap" list="interfacesList" style="flex: 1;" />
+          <select id="pcapSelect" style="display: none; flex: 1;">
+            <option value="">-- choose a PCAP --</option>
+          </select>
+          <button id="scanIfacesBtn" class="secondary">Scan</button>
+          <button id="listPcapsBtn" class="secondary" style="display: none;">List PCAPs</button>
+          <datalist id="interfacesList"></datalist>
+          <datalist id="pcapsList"></datalist>
+        </div>
+        <div class="form-row" id="pcapOptions" style="display: none;">
+          <label>PCAP playback:</label>
+          <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" id="pcapRealtime" checked />Real-time</label>
+          <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" id="pcapLoop" />Loop File</label>
+        </div>
+        <div class="form-row"><label>Model path (.h5):</label><input id="model" placeholder="./output/10t-10n-DOS2019-LUCID.h5" style="flex: 1;" /></div>
+        <div class="form-row"><label>Dataset type (optional):</label><input id="datasetType" placeholder="DOS2019" style="flex: 1;" /></div>
+        <div class="form-row"><label>Ground truth (KPIs):</label>
+          <select id="gtOverride" style="flex: 1;">
+            <option value="">None</option>
+            <option value="all_attack">Force: All attack</option>
+            <option value="all_benign">Force: All benign</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Attack net (optional):</label><input id="attackNet" placeholder="172.16.0.0/24" style="flex: 1;" /></div>
+        <div class="form-row"><label>Victim net (optional):</label><input id="victimNet" placeholder="192.168.50.0/24" style="flex: 1;" /></div>
+        <div class="form-row"><label>Alert threshold (0-1):</label><input type="number" step="0.01" id="threshold" value="0.5" style="width: 100px;" /></div>
+        <div class="form-row" id="demoTokenRow"><label>Demo token (optional):</label><input id="demoToken" placeholder="Paste token for protected demo" style="flex: 1;" /></div>
+        <div class="buttons"><button id="startBtn" type="button">Start</button><button id="stopBtn" type="button" class="secondary">Stop</button></div>
+      </form>
+      <div id="ingestHint" class="muted" style="margin-top: 8px; display: none;">
+        External mode enabled. POST fragments to <code>/api/ingest</code> while running.
+      </div>
+      <div id="ingestTest" class="card" style="margin-top: 13px; display: none; padding: 12px;">
+        <div class="form-row" style="flex-direction: column; align-items: flex-start;">
+          <label>Manual ingest (JSON):</label>
+          <textarea id="ingestJson" rows="7" placeholder='{"fragments": [[[0.01,80,6,60],[0.02,80,6,52]]], "src_ips":["203.0.0.1"], "dest_ports":[80]}' style="width: 100%;"></textarea>
+        </div>
+        <div class="buttons" style="margin-top: 8px;">
+          <button id="sendIngestBtn">Send JSON</button>
+          <button id="sendDemoBtn" class="secondary">Send demo fragments</button>
+          <span id="ingestResult" class="muted" style="margin-left: 12px;"></span>
+        </div>
+      </div>
+    </section>
+    <!-- Metrics Charts -->
+    <section class="charts card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+        <h2 style="margin: 0; font-size: 1.21em;">Metrics</h2>
+        <div id="debugStats" class="muted" style="font-size: 0.97em;"></div>
+        <span class="chip" title="Alert threshold for DDoS Fraction">threshold: <span id="thresholdBadge">0.50</span></span>
+      </div>
+      <details class="help" style="margin-bottom: 17px; font-size: 0.95em;">
+        <summary style="cursor: pointer; font-weight: 500;">What these metrics mean</summary>
+        <ul style="padding-left: 20px; margin-top: 7px;">
+          <li><strong>DDoS Fraction</strong>: Share of flow samples classified as DDoS in this window. Above threshold triggers alert.</li>
+          <li><strong>Forecast (next)</strong>: Short-term prediction for next window DDoS Fraction.</li>
+          <li><strong>Flow Density</strong>: Number of active flows. Spikes may indicate floods.</li>
+          <li><strong>Unique Destination Ports</strong>: Spread of target ports. High spread suggests port sweeps.</li>
+          <li><strong>Source IP Diversity</strong>: Unique source IPs—high = distributed attacks.</li>
+        </ul>
+      </details>
+      <div class="grid" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 23px;">
+        <div>
+          <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">
+            DDoS Fraction <span class="info muted" title="Fraction of samples flagged as DDoS in this window." style="cursor: help;">i</span>
+          </div>
+          <canvas id="ddosChart"></canvas>
+        </div>
+        <div>
+          <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">
+            Flow Density <span class="info muted" title="Number of active flows seen in this window." style="cursor: help;">i</span>
+          </div>
+          <canvas id="flowChart"></canvas>
+        </div>
+        <div>
+          <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">
+            Unique Destination Ports <span class="info muted" title="Distinct destination ports hit." style="cursor: help;">i</span>
+          </div>
+          <canvas id="portsChart"></canvas>
+        </div>
+        <div>
+          <div class="chart-title" style="font-weight: 500; margin-bottom: 8px;">
+            Source IP Diversity <span class="info muted" title="Distinct source IPs seen." style="cursor: help;">i</span>
+          </div>
+          <canvas id="srcChart"></canvas>
+        </div>
+      </div>
+    </section>
+    <!-- Alerts -->
+    <section class="alerts card">
+      <h2 style="margin-top: 0; font-size: 1.22em;">Alerts</h2>
+      <div id="alertBanner" class="banner-alert hidden">ALERT: Potential DDoS detected</div>
+      <ul id="alertList" style="list-style: none; padding: 0; margin: 0; font-size: 0.98em;"></ul>
+    </section>
+    <!-- Mitigation UI -->
+    <section class="mitigation card">
+      <h2 style="margin-top: 0; font-size: 1.18em;">Mitigation</h2>
+      <form style="display: grid; gap: 16px;">
+        <div class="form-row">
+          <label>Block sources (comma-separated):</label>
+          <input id="blockSources" placeholder="1.2.3.4, 5.6.7.8" style="flex: 1;" />
+          <button id="blockBtn" type="button">Block</button>
+        </div>
+        <div class="form-row">
+          <label>Unblock sources (comma-separated):</label>
+          <input id="unblockSources" placeholder="1.2.3.4, 5.6.7.8" style="flex: 1;" />
+          <button id="unblockBtn" type="button">Unblock</button>
+        </div>
+        <div class="form-row">
+          <label>Allowlist (comma-separated):</label>
+          <input id="allowlistInput" placeholder="10.0.0.1, 10.0.0.2" style="flex: 1;" />
+          <button id="allowAddBtn" type="button">Add</button>
+          <button id="allowRemoveBtn" type="button" class="secondary">Remove</button>
+        </div>
+        <div class="form-row">
+          <label>Hysteresis (consecutive alerts):</label>
+          <input type="number" id="hysteresisInput" value="2" style="width: 80px;" />
+          <label style="margin-left: 16px;">Cooldown (sec):</label>
+          <input type="number" id="cooldownInput" value="120" style="width: 100px;" />
+          <button id="savePolicyBtn" type="button" style="margin-left: 16px;">Save Policy</button>
+        </div>
+        <div class="form-row" style="align-items: flex-start;">
+          <label>Currently blocked:</label>
+          <span id="blockedList" class="badges" style="flex: 1; display: flex; flex-wrap: wrap; gap: 4px;">(none)</span>
+        </div>
+      </form>
+    </section>
+  </main>
+  <footer class="footer">
+    &copy; 2025 LUCID Labs. All rights reserved.
+  </footer>
+  <!-- JS logic (unchanged, full functionalities retained, can paste original JS block here) -->
+  <script>
+     console.log('LUCID UI version: 2025-11-03.1');
+        // Remove critical CSS after main stylesheet loads
+        window.addEventListener('load', () => {
+            const sheets = Array.from(document.styleSheets);
+            const hasMain = sheets.some(s => (s.href || '').includes('styles.css'));
+            if (hasMain) {
+                const el = document.getElementById('critical-css');
+                if (el) el.remove();
+            }
+        });
+        const statusEl = document.getElementById('statusText');
+        const statusPill = document.getElementById('statusPill');
+        const alertBanner = document.getElementById('alertBanner');
+        const alertList = document.getElementById('alertList');
+        const blockedList = document.getElementById('blockedList');
+        const kpiTPR = document.getElementById('kpiTPR');
+        const kpiFPR = document.getElementById('kpiFPR');
+        const kpiTTD = document.getElementById('kpiTTD');
+        const kpiPD = document.getElementById('kpiPD');
+        const kpiCounts = document.getElementById('kpiCounts');
+        const kpiSrc = document.getElementById('kpiSrc');
+        const sourceKindEl = document.getElementById('sourceKind');
+        const sourceEl = document.getElementById('source');
+        const scanIfacesBtn = document.getElementById('scanIfacesBtn');
+        const listPcapsBtn = document.getElementById('listPcapsBtn');
+        const interfacesList = document.getElementById('interfacesList');
+        const pcapsList = document.getElementById('pcapsList');
+    const pcapSelect = document.getElementById('pcapSelect');
+        const ingestHint = document.getElementById('ingestHint');
+        const ingestTest = document.getElementById('ingestTest');
+        const ingestJson = document.getElementById('ingestJson');
+        const ingestResult = document.getElementById('ingestResult');
+        const demoTokenEl = document.getElementById('demoToken');
+        const pcapRealtimeEl = document.getElementById('pcapRealtime');
+        const pcapLoopEl = document.getElementById('pcapLoop');
+        // Auth helpers
+        const tokenKey = 'lucid-demo-token';
+        try { const savedTok = localStorage.getItem(tokenKey); if (savedTok && demoTokenEl) demoTokenEl.value = savedTok; } catch {}
+        let isCookieAuth = false;
+        function getAuthToken() { return (demoTokenEl && demoTokenEl.value.trim()) || ''; }
+        function authHeaders() {
+            // If cookie-based auth is active, no need to add Authorization header
+            if (isCookieAuth) return {};
+            const t = getAuthToken();
+            return t ? { 'Authorization': 'Bearer ' + t } : {};
+        }
+        if (demoTokenEl) { demoTokenEl.addEventListener('change', () => { try { localStorage.setItem(tokenKey, demoTokenEl.value.trim()); } catch {} }); }
+        async function detectAuthState() {
+            const demoRow = document.getElementById('demoTokenRow');
+            const authBox = document.getElementById('authBox');
+            try {
+                const res = await fetch('/api/status', { method: 'GET' });
+                if (res.ok) {
+                    isCookieAuth = true;
+                    if (demoRow) demoRow.style.display = 'none';
+                    if (authBox) authBox.style.display = 'flex';
+                } else {
+                    isCookieAuth = false;
+                    if (demoRow) demoRow.style.display = '';
+                    if (authBox) authBox.style.display = 'none';
+                }
+            } catch (e) {
+                isCookieAuth = false;
+                if (demoRow) demoRow.style.display = '';
+                if (authBox) authBox.style.display = 'none';
+            }
+        }
+        detectAuthState();
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.onclick = async () => {
+                try {
+                    await fetch('/auth/logout', { method: 'POST' });
+                } catch {}
+                window.location.href = '/login';
+            };
+        }
+
+        async function refreshStatus() {
+            try {
+                const res = await fetch('/api/status', { headers: { ...authHeaders() } });
+                const data = await res.json();
+                const st = data.status || 'unknown';
+                statusEl.textContent = st;
+                statusPill.textContent = st;
+                statusPill.className = 'status-pill ' + st;
+                const errEl = document.getElementById('statusError');
+                if (data.last_error) {
+                    errEl.textContent = `Last error: ${data.last_error}`;
+                    errEl.classList.remove('hidden');
+                } else {
+                    errEl.textContent = '';
+                    errEl.classList.add('hidden');
+                }
+                // KPIs
+                if (data.accuracy) {
+                    kpiTPR.textContent = data.accuracy.TPR != null ? data.accuracy.TPR.toFixed(2) : '-';
+                    kpiFPR.textContent = data.accuracy.FPR != null ? data.accuracy.FPR.toFixed(2) : '-';
+                    kpiTTD.textContent = data.accuracy.TTD_sec != null ? data.accuracy.TTD_sec.toFixed(2) : '-';
+                }
+                if (typeof data.prevented_downtime_min === 'number') {
+                    kpiPD.textContent = data.prevented_downtime_min.toFixed(2);
+                }
+                if (data.kpi_counts) {
+                    const {TP=0,FP=0,TN=0,FN=0} = data.kpi_counts;
+                    kpiCounts.textContent = `TP=${TP} FP=${FP} TN=${TN} FN=${FN}`;
+                }
+                if (data.kpi_source) {
+                    kpiSrc.textContent = data.kpi_source;
+                }
+
+                // Blocked list: prefer mitigation with stages
+                if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                    blockedList.innerHTML = data.mitigation.map(m => `<span class="badge"><span class="dot ${m.stage}"></span>${m.ip} (${m.stage})</span>`).join(' ');
+                } else if (data.blocked_sources && data.blocked_sources.length) {
+                    blockedList.innerHTML = data.blocked_sources.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ');
+                } else {
+                    blockedList.textContent = '(none)';
+                }
+            } catch (e) {
+                statusEl.textContent = 'error';
+            }
+        }
+
+        refreshStatus();
+        setInterval(refreshStatus, 3000);
+
+        // Charts
+        const ddosCtx = document.getElementById('ddosChart').getContext('2d');
+        const flowCtx = document.getElementById('flowChart').getContext('2d');
+        const portsCtx = document.getElementById('portsChart').getContext('2d');
+        const srcCtx = document.getElementById('srcChart').getContext('2d');
+
+        const timeFmt = (ts) => new Date(ts * 1000).toLocaleTimeString();
+        const fmtPct = (x) => typeof x === 'number' ? x.toFixed(3) : '-';
+        const fmtNum = (x) => typeof x === 'number' ? x.toLocaleString() : '-';
+
+        function makeChart(ctx, label, color, yMin = 0, yMax = undefined) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ label, data: [], borderColor: color, tension: 0.2, pointRadius: 0 }]},
+                options: {
+                    responsive: true,
+                    scales: { y: { min: yMin, max: yMax } },
+                    animation: false,
+                },
+            });
+        }
+
+        // Threshold line plugin
+        const thresholdPlugin = {
+            id: 'thresholdLine',
+            afterDraw(chart, args, opts) {
+                const value = opts && typeof opts.value === 'number' ? opts.value : null;
+                if (value == null) return;
+                const {ctx, chartArea, scales: {y}} = chart;
+                const yPix = y.getPixelForValue(value);
+                ctx.save();
+                ctx.strokeStyle = (opts && opts.color) || '#ef4444';
+                ctx.setLineDash([6,4]);
+                ctx.beginPath();
+                ctx.moveTo(chartArea.left, yPix);
+                ctx.lineTo(chartArea.right, yPix);
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        const ddosChart = new Chart(ddosCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'DDoS Fraction', data: [], borderColor: '#e11d48', backgroundColor: 'rgba(225,29,72,0.08)', tension: 0.2, pointRadius: 0 },
+                    { label: 'Uncertainty High', data: [], borderColor: 'transparent', pointRadius: 0 },
+                    { label: 'Uncertainty Low', data: [], borderColor: 'transparent', backgroundColor: 'rgba(255,99,132,0.12)', fill: '-1', pointRadius: 0 },
+                    { label: 'Forecast (next)', data: [], borderColor: '#f59e0b', borderDash: [6,4], tension: 0.2, pointRadius: 0 },
+                    { label: 'Alerts', data: [], type: 'line', borderColor: 'transparent', pointBackgroundColor: '#ef4444', pointRadius: 3, showLine: false },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { thresholdLine: { value: 0.5, color: '#ef4444' }, legend: { labels: { filter: (item) => item.text !== 'Alerts' } } },
+                scales: { y: { min: 0, max: 1 } },
+                animation: false,
+            },
+            plugins: [thresholdPlugin],
+        });
+        const flowChart = makeChart(flowCtx, 'Flow Density', '#2563eb');
+        const portsChart = makeChart(portsCtx, 'Unique Dest Ports', '#16a34a');
+        const srcChart = makeChart(srcCtx, 'Src IP Diversity', '#7c3aed');
+
+        function pushChartPoint(chart, ts, vals, maxPoints = 200) {
+            // vals can be single value or array per dataset index
+            chart.data.labels.push(timeFmt(ts));
+            const arr = Array.isArray(vals) ? vals : [vals];
+            arr.forEach((v, idx) => {
+                if (!chart.data.datasets[idx]) return;
+                chart.data.datasets[idx].data.push(v);
+            });
+            if (chart.data.labels.length > maxPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets.forEach(ds => ds.data.shift());
+            }
+            chart.update();
+        }
+
+        // Shared WS message handler (used for initial stream and reconnects)
+        function handleWsMessage(m) {
+            const next = m?.forecast?.ddos_fraction_next ?? null;
+            const confHi = m?.forecast?.confidence_high ?? null;
+            const confLo = m?.forecast?.confidence_low ?? null;
+            const alertVal = (m?.alert ? m.ddos_fraction : NaN);
+            pushChartPoint(ddosChart, m.ts, [m.ddos_fraction, confHi, confLo, next, alertVal]);
+            pushChartPoint(flowChart, m.ts, m?.metrics?.flow_density ?? 0);
+            pushChartPoint(portsChart, m.ts, m?.metrics?.unique_dest_ports ?? 0);
+            pushChartPoint(srcChart, m.ts, m?.metrics?.src_ip_diversity ?? 0);
+
+            // Debug strip: show latest fractions and counts
+            try {
+                const ds = document.getElementById('debugStats');
+                if (ds) {
+                    const samples = (typeof m?.samples === 'number') ? m.samples : null;
+                    const pos = (typeof m?.positive_count === 'number') ? m.positive_count : null;
+                    const frac = (typeof m?.ddos_fraction === 'number') ? m.ddos_fraction.toFixed(3) : '-';
+                    ds.textContent = `last: ddos_fraction=${frac}${samples!=null?` (pos ${pos}/${samples})`:''}`;
+                }
+            } catch {}
+
+            if (m.alert || (m?.forecast?.predicted_alert)) {
+                alertBanner.classList.remove('hidden');
+                const item = document.createElement('li');
+                const pred = (m?.forecast?.predicted_alert && !m.alert) ? ' (predicted next window)' : '';
+                let autoTxt = '';
+                if (Array.isArray(m.auto_blocked) && m.auto_blocked.length) {
+                    const ab = m.auto_blocked.map(x => typeof x === 'string' ? x : `${x.ip} (${x.stage||'blocked'})`).join(', ');
+                    autoTxt = ` | auto-blocked: ${ab}`;
+                }
+                item.textContent = `${timeFmt(m.ts)} ALERT${pred} — ddos_fraction=${fmtPct(m.ddos_fraction)} (threshold ${fmtPct(m.threshold)})${autoTxt}`;
+                item.style.marginBottom = '8px';
+                alertList.prepend(item);
+            } else {
+                alertBanner.classList.add('hidden');
+            }
+
+            // Update currently blocked list immediately if present in payload
+            if (Array.isArray(m.mitigation) && m.mitigation.length) {
+                blockedList.innerHTML = m.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
+            } else if (Array.isArray(m.blocked_sources)) {
+                blockedList.innerHTML = m.blocked_sources.length ? m.blocked_sources.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ') : '(none)';
+            }
+
+            // Update threshold badge and line on chart
+            if (typeof m.threshold === 'number') {
+                const thr = m.threshold;
+                document.getElementById('thresholdBadge').textContent = thr.toFixed(2);
+                ddosChart.options.plugins.thresholdLine.value = thr;
+            }
+        }
+
+        // WebSocket stream
+        const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsToken = encodeURIComponent(getAuthToken() || '');
+        let ws = new WebSocket(`${wsProto}://${location.host}/ws${wsToken ? ('?token=' + wsToken) : ''}`);
+        ws.onmessage = (evt) => { try { const m = JSON.parse(evt.data); handleWsMessage(m); } catch (e) { console.error('Bad WS message', e); } };
+
+        // History backfill (only if charts are empty)
+        async function fetchHistoryAndPopulate() {
+            try {
+                if ((ddosChart.data.labels || []).length > 0) return; // avoid duplicate points
+                const res = await fetch('/api/history', { headers: { ...authHeaders() } });
+                if (!res.ok) return;
+                const hist = await res.json();
+                if (!Array.isArray(hist) || hist.length === 0) return;
+                const recent = hist.slice(-50);
+                recent.forEach(m => {
+                    try { handleWsMessage(m); } catch {}
+                });
+            } catch (e) {
+                // noop
+            }
+        }
+
+        // Controls
+        document.getElementById('startBtn').onclick = async () => {
+            const body = {
+                source: sourceEl.value.trim() || (sourceKindEl.value === 'http' ? 'external' : ''),
+                model_path: document.getElementById('model').value.trim(),
+                dataset_type: (document.getElementById('datasetType').value || '').trim() || null,
+                attack_net: (document.getElementById('attackNet').value || '').trim() || null,
+                victim_net: (document.getElementById('victimNet').value || '').trim() || null,
+                threshold: parseFloat(document.getElementById('threshold').value || '0.5'),
+                source_kind: sourceKindEl.value,
+                ground_truth_override: (document.getElementById('gtOverride').value || '') || null,
+            };
+            if (sourceKindEl.value === 'pcap') {
+                if (pcapRealtimeEl) body.pcap_realtime = !!pcapRealtimeEl.checked;
+                if (pcapLoopEl) body.pcap_loop = !!pcapLoopEl.checked;
+            }
+            const res = await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
+                    if (!res.ok) {
+                let msg = '';
+                try {
+                    const data = await res.json();
+                    msg = data.detail || JSON.stringify(data);
+                } catch (e) {
+                    msg = await res.text();
+                }
+                alert(`Start failed (${res.status}): ${msg}`);
+                return;
+            }
+                        // Try to populate charts from recent history in case the websocket missed messages
+                        try {
+                            await fetchHistoryAndPopulate();
+                        } catch (e) {
+                            console.debug('fetchHistoryAndPopulate failed', e);
+                        }
+                        // Ensure websocket is open; if not, attempt a reconnect
+                        try {
+                            if (!ws || ws.readyState !== 1) {
+                                try {
+                                    const token = encodeURIComponent(getAuthToken() || '');
+                                    const newUrl = `${wsProto}://${location.host}/ws${token ? ('?token=' + token) : ''}`;
+                                    if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
+                                        try { ws.close(); } catch(e){}
+                                    }
+                                    ws = new WebSocket(newUrl);
+                                    ws.onmessage = (evt) => { try { const m = JSON.parse(evt.data); handleWsMessage(m); } catch(e){console.error(e);} };
+                                } catch (e) { console.debug('WebSocket reconnect failed', e); }
+                            }
+                        } catch (e) {}
+                        refreshStatus();
+        };
+
+        // Stop handler: POST /api/stop and refresh status
+        document.getElementById('stopBtn').onclick = async () => {
+            try {
+                const res = await fetch('/api/stop', { method: 'POST', headers: { ...authHeaders() } });
+                if (!res.ok) {
+                    let msg = '';
+                    try { const data = await res.json(); msg = data.detail || JSON.stringify(data); } catch (e) { msg = await res.text(); }
+                    alert(`Stop failed (${res.status}): ${msg}`);
+                }
+            } catch (e) {
+                console.error('Stop error', e);
+            } finally {
+                setTimeout(refreshStatus, 200);
+            }
+        };
+
+        // Scan interfaces (tshark -D via backend)
+        if (scanIfacesBtn) {
+            scanIfacesBtn.onclick = async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/interfaces', { headers: { ...authHeaders() } });
+                    const data = await res.json();
+                    interfacesList.innerHTML = '';
+                    if (!data.tshark) {
+                        alert('tshark not found on server. Install it (e.g., sudo apt install tshark) and ensure capture permissions.');
+                        return;
+                    }
+                    (data.interfaces || []).forEach(it => {
+                        const opt = document.createElement('option');
+                        opt.value = it.name;
+                        opt.label = it.desc || '';
+                        interfacesList.appendChild(opt);
+                    });
+                    if (!data.interfaces || data.interfaces.length === 0) {
+                        alert('No interfaces listed by tshark -D. Try running server with appropriate permissions or verify tshark works.');
+                    }
+                } catch (e) {
+                    alert('Failed to scan interfaces: ' + (e?.message || e));
+                }
+            };
+        }
+
+        // List PCAP files available on server
+        if (listPcapsBtn) {
+            listPcapsBtn.onclick = async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/pcaps', { headers: { ...authHeaders() } });
+                    const data = await res.json();
+                    pcapsList.innerHTML = '';
+                    if (pcapSelect) {
+                        pcapSelect.innerHTML = '<option value="">-- choose a PCAP --</option>';
+                    }
+                    if (!data.ok) {
+                        alert('Failed to list PCAPs: ' + (data.error || 'unknown error'));
+                        return;
+                    }
+                    (data.files || []).forEach(it => {
+                        const opt = document.createElement('option');
+                        opt.value = it.path;
+                        opt.label = it.name || it.path;
+                        pcapsList.appendChild(opt);
+                        if (pcapSelect) {
+                            const o = document.createElement('option');
+                            o.value = it.path;
+                            o.textContent = it.name || it.path;
+                            pcapSelect.appendChild(o);
+                        }
+                    });
+                    if (!data.files || data.files.length === 0) {
+                        alert('No .pcap files found in sample-dataset/ or repo.');
+                    }
+                } catch (e) {
+                    alert('Failed to list PCAPs: ' + (e?.message || e));
+                }
+            };
+        }
+
+        // When choosing from dropdown, mirror selection into the source input
+        if (pcapSelect) {
+            pcapSelect.addEventListener('change', () => {
+                const v = pcapSelect.value || '';
+                sourceEl.value = v;
+            });
+        }
+
+        document.getElementById('blockBtn').onclick = async () => {
+            const txt = document.getElementById('blockSources').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ block_sources: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.innerHTML = data.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
+            } else {
+                const arr = (data.blocked_sources || []);
+                blockedList.innerHTML = arr.length ? arr.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ') : '(none)';
+            }
+        };
+
+        document.getElementById('unblockBtn').onclick = async () => {
+            const txt = document.getElementById('unblockSources').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ unblock_sources: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.innerHTML = data.mitigation.map(x => `<span class="badge"><span class="dot ${x.stage}"></span>${x.ip} (${x.stage})</span>`).join(' ');
+            } else {
+                const arr = (data.blocked_sources || []);
+                blockedList.innerHTML = arr.length ? arr.map(ip => `<span class="badge"><span class="dot monitor"></span>${ip}</span>`).join(' ') : '(none)';
+            }
+        };
+
+        document.getElementById('allowAddBtn').onclick = async () => {
+            const txt = document.getElementById('allowlistInput').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ allowlist_add: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.textContent = data.mitigation.map(x => `${x.ip} (${x.stage})`).join(', ');
+            } else {
+                blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
+            }
+        };
+
+        document.getElementById('allowRemoveBtn').onclick = async () => {
+            const txt = document.getElementById('allowlistInput').value.trim();
+            const list = txt ? txt.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const res = await fetch('/api/mitigation', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ allowlist_remove: list }) });
+            const data = await res.json();
+            if (Array.isArray(data.mitigation) && data.mitigation.length) {
+                blockedList.textContent = data.mitigation.map(x => `${x.ip} (${x.stage})`).join(', ');
+            } else {
+                blockedList.textContent = (data.blocked_sources || []).join(', ') || '(none)';
+            }
+        };
+
+        // External ingest helpers and UI
+        async function postIngest(payload) {
+            const res = await fetch('/api/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
+            if (!res.ok) {
+                let msg = '';
+                try { const data = await res.json(); msg = data.detail || JSON.stringify(data); } catch (e) { msg = await res.text(); }
+                throw new Error(msg || `HTTP ${res.status}`);
+            }
+            return res.json();
+        }
+        const sendIngestBtn = document.getElementById('sendIngestBtn');
+        const sendDemoBtn = document.getElementById('sendDemoBtn');
+        if (sendIngestBtn) {
+            sendIngestBtn.onclick = async () => {
+                ingestResult.textContent = '';
+                try {
+                    const payload = JSON.parse(ingestJson.value || '{}');
+                    const data = await postIngest(payload);
+                    ingestResult.textContent = `Queued ${data.queued} fragment(s)`;
+                } catch (e) {
+                    ingestResult.textContent = `Error: ${e.message || e}`;
+                }
+            };
+        }
+        if (sendDemoBtn) {
+            sendDemoBtn.onclick = async () => {
+                ingestResult.textContent = '';
+                const demo = {
+                    fragments: [
+                        [[0.01,80,6,60,0,1],[0.02,80,6,52,0,1],[0.03,80,6,60,0,1]],
+                        [[0.00,443,17,78,1,0],[0.00,443,17,74,1,0]]
+                    ],
+                    src_ips: ["203.0.113.10","198.51.100.7"],
+                    dest_ports: [80,443]
+                };
+                try {
+                    const data = await postIngest(demo);
+                    ingestResult.textContent = `Queued ${data.queued} demo fragment(s)`;
+                } catch (e) {
+                    ingestResult.textContent = `Error: ${e.message || e}`;
+                }
+            };
+        }
+
+        function updateSourceUI() {
+            const kind = sourceKindEl ? sourceKindEl.value : 'iface';
+            if (kind === 'iface') {
+                sourceEl.placeholder = 'eth0';
+                sourceEl.setAttribute('list', 'interfacesList');
+                if (ingestHint) ingestHint.style.display = 'none';
+                if (ingestTest) ingestTest.style.display = 'none';
+                if (scanIfacesBtn) scanIfacesBtn.style.display = '';
+                if (listPcapsBtn) listPcapsBtn.style.display = 'none';
+                if (pcapSelect) pcapSelect.style.display = 'none';
+                const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
+            } else if (kind === 'pcap') {
+                sourceEl.placeholder = '/path/to/file.pcap';
+                sourceEl.setAttribute('list', 'pcapsList');
+                if (ingestHint) ingestHint.style.display = 'none';
+                if (ingestTest) ingestTest.style.display = 'none';
+                if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
+                if (listPcapsBtn) listPcapsBtn.style.display = '';
+                if (pcapSelect) pcapSelect.style.display = '';
+                const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = '';
+                // Auto-fetch PCAP list on switch to pcap view for convenience
+                if (pcapsList && (!pcapsList.options || pcapsList.options.length === 0)) {
+                    if (listPcapsBtn && typeof listPcapsBtn.onclick === 'function') {
+                        listPcapsBtn.onclick(new Event('click'));
+                    }
+                }
+            } else {
+                sourceEl.placeholder = '(optional) e.g., external';
+                sourceEl.removeAttribute('list');
+                if (ingestHint) ingestHint.style.display = '';
+                if (ingestTest) ingestTest.style.display = '';
+                if (scanIfacesBtn) scanIfacesBtn.style.display = 'none';
+                if (listPcapsBtn) listPcapsBtn.style.display = 'none';
+                if (pcapSelect) pcapSelect.style.display = 'none';
+                const pcapOpts = document.getElementById('pcapOptions'); if (pcapOpts) pcapOpts.style.display = 'none';
+            }
+        }
+        if (sourceKindEl) sourceKindEl.addEventListener('change', updateSourceUI);
+        updateSourceUI();
+
+        document.getElementById('savePolicyBtn').onclick = async () => {
+            const hyst = parseInt(document.getElementById('hysteresisInput').value || '2', 10);
+            const cool = parseInt(document.getElementById('cooldownInput').value || '120', 10);
+            await fetch('/api/mitigation', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ hysteresis_windows: hyst, cooldown_seconds: cool })
+            });
+        };
+
+        // Theme toggle
+        const themeKey = 'lucid-theme';
+        const setThemeIcon = () => {
+            const btn = document.getElementById('themeToggle');
+            if (!btn) return;
+            const isLight = document.body.classList.contains('theme-light');
+            // Show the icon of the target mode to switch to
+            btn.textContent = isLight ? '🌙' : '☀️';
+        };
+
+        const applyTheme = (t) => {
+            document.body.classList.remove('theme-light', 'theme-dark');
+            document.body.classList.add(t);
+            try { localStorage.setItem(themeKey, t); } catch {}
+            applyChartTheme();
+            setThemeIcon();
+        };
+        const saved = (() => { try { return localStorage.getItem(themeKey); } catch { return null; } })();
+        // Apply saved theme safely; if charts not yet ready, catch to avoid halting script in some browsers
+        try { applyTheme(saved || 'theme-light'); } catch (e) { document.body.classList.add(saved || 'theme-light'); }
+        document.getElementById('themeToggle').onclick = () => {
+            const next = document.body.classList.contains('theme-light') ? 'theme-dark' : 'theme-light';
+            applyTheme(next);
+        };
+
+        // Chart theming
+        function applyChartTheme() {
+            const isLight = document.body.classList.contains('theme-light');
+            const grid = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+            const tick = isLight ? '#475569' : '#cbd5e1';
+            [ddosChart, flowChart, portsChart, srcChart].forEach(c => {
+                c.options.scales.x.grid.color = grid;
+                c.options.scales.y.grid.color = grid;
+                c.options.scales.x.ticks.color = tick;
+                c.options.scales.y.ticks.color = tick;
+                c.update('none');
+            });
+        }
+    // Dashboard JS (see your original for full logic, directly compatible)
+    // ... full logic unchanged, or copy your script exactly here from your previous version ...
+    // For improved status icon:
+    // statusIcon.textContent = st==="running" ? "🟢" : st==="idle" ? "⏸️" : st==="error" ? "🔴" : "⚪";
+    // All chart, websocket, controls, ingest and mitigation code as previous.
+  </script>
+</body>
+</html>

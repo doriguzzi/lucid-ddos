@@ -7,6 +7,8 @@ More details on the architecture of LUCID and its performance in terms of detect
 R. Doriguzzi-Corin, S. Millar, S. Scott-Hayward, J. Martínez-del-Rincón and D. Siracusa, "Lucid: A Practical, Lightweight Deep Learning Solution for DDoS Attack Detection," in *IEEE Transactions on Network and Service Management*, vol. 17, no. 2, pp. 876-889, June 2020, doi: 10.1109/TNSM.2020.2971776.
 
 
+> On Windows? See the step-by-step guide: [README_WINDOWS.md](README_WINDOWS.md)
+
 
 ## Installation
 
@@ -261,6 +263,227 @@ python3 lucid_cnn.py --predict_live ./sample-dataset/CIC-DDoS-2019-UDPLag.pcap -
 In this case, the argument of option ```predict_live``` must be the path to a pcap file. The script parses the file from the beginning to the end, printing the classification results every time the time window expires. The duration of the time window is automatically detected from the prefix of the model's name (e.g., ```10t``` indicates a 10-second time window). 
 
 The output of LUCID on the victim machine will be similar to that reported in Section **Testing** above. 
+
+
+## Web-based Monitoring Dashboard
+
+This repository now includes a lightweight web application that wraps LUCID's live inference and exposes:
+
+- Real-time metrics (flow density, unique destination ports, source IP diversity, packet volume)
+- Deep learning anomaly detection (fraction of windows predicted DDoS in each time window)
+- Predictive/operational visibility via rolling charts and live alerts
+- A simple mitigation interface (simulated) to block selected source IPs from monitoring
+
+### Run the server
+
+1) Create/activate the Python 3.9 environment as described above (same TF 2.7.1 setup). Then install the extra packages:
+
+```
+pip install -r requirements.txt
+```
+
+2) Start the web server:
+
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+3) Open the dashboard in your browser:
+
+```
+http://localhost:8000/
+```
+
+### Using the dashboard
+
+- Provide a source:
+	- A network interface (e.g., `eth0`) for live capture (requires tshark, see above), or
+	- A pcap file (e.g., `./sample-dataset/CIC-DDoS-2019-UDPLag.pcap`).
+- Provide a trained LUCID model (`.h5`) produced by `lucid_cnn.py` training (e.g., `./output/10t-10n-DOS2019-LUCID.h5`).
+- Optionally set `dataset_type`, `attack_net`, `victim_net` to compute accuracy metrics where labels are known.
+- Click Start to begin streaming; Stop to end.
+- Use the Mitigation panel to simulate blocking source IPs (they will be excluded from subsequent windows' metrics and scoring).
+
+The UI displays rolling charts for:
+
+- DDOS Fraction (per-time-window fraction of samples predicted as DDoS)
+- Flow Density (number of flows per window)
+- Unique Destination Ports
+- Source IP Diversity
+
+Alerts are raised when the `DDOS Fraction` exceeds the chosen threshold (default 0.5) for the current window.
+
+### Notes
+
+- The capture uses `pyshark`, which depends on `tshark` (see installation notes above). For offline `.pcap` replay, `tshark` is still required.
+- Time window and max flow length are automatically parsed from the model filename (`<t>t-<n>n-...h5`) with fallbacks to 10/10.
+- The web server streams data via WebSocket at `/ws` and provides control endpoints under `/api/*`.
+
+### Deploying on Render (Native Python Environment)
+
+If you use Render's native Python runtime (not Docker), you must install `tshark` during the build so that `pyshark` can parse PCAP files.
+
+Example `render.yaml` for native runtime:
+
+```yaml
+services:
+	- type: web
+		name: lucid-ddos
+		env: python
+		plan: free
+		buildCommand: |
+			sudo apt-get update
+			sudo apt-get install -y --no-install-recommends tshark
+			pip install -r requirements-hosted.txt
+		startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+		envVars:
+			- key: PYSHARK_TSHARK_PATH
+				value: /usr/bin/tshark
+			- key: LUCID_PCAP_DIRS
+				value: /opt/render/project/src/sample-dataset
+```
+
+Key points:
+
+- `tshark` is required even for offline PCAP playback. Without it, the detector will set status `error` and report a PCAP read error.
+- Use `requirements-hosted.txt` (TensorFlow CPU compatible with newer FastAPI/Pydantic constraints) or adapt `requirements.txt` if your Python version matches.
+- Set `PYSHARK_TSHARK_PATH` to the installed binary path (`which tshark`). The code now looks for `PYSHARK_TSHARK_PATH` or `TSHARK_PATH` before falling back.
+- Ensure your model and PCAP files are checked into the repo so they are available at build time (`output/10t-10n-...h5`, `sample-dataset/*.pcap`).
+
+Verification after deploy:
+
+1. Check build log for `tshark -v` output (optional if using Docker; for native, confirm install succeeded).
+2. Hit `/api/pcaps` – should list your PCAP files. If empty, confirm `LUCID_PCAP_DIRS` and that files exist.
+3. POST `/api/start` with a PCAP source. Status should remain `running`; if it switches to `error` with `PCAP read error (tshark missing or crashed?)`, installation failed.
+4. Monitor `/api/status` for increasing `samples` and `history` length.
+
+Fallback: If `apt-get` is not permitted on your chosen plan, switch to Docker (the provided `Dockerfile` already installs `tshark`).
+
+### Render Deployment Troubleshooting
+
+Common issue: `No module named uvicorn` after Render runs `python -m uvicorn app.main:app ...`.
+
+Root cause: Your Build Command didn’t install dependencies into the SAME interpreter used at runtime (Render’s virtualenv), or `uvicorn` is missing from the dependency file that Render actually installs.
+
+Quick checklist:
+
+1. Single source of truth: Confirm which file Render installs (for this repo prefer `requirements-hosted.txt`). If you rely on `requirements.txt` ensure it also contains `uvicorn[standard]`.
+2. Build logs: Look for lines containing `pip install -r ...` and verify `uvicorn` appears.
+3. Custom build script: If you override the build step, include:
+	 ```bash
+	 pip install -r requirements-hosted.txt
+	 ```
+4. Interpreter mismatch: If you create a venv manually, Render’s Start Command might use a different Python. Use module invocation (`python -m uvicorn`) so it imports from that interpreter’s site-packages.
+5. TShark errors: If PCAP replay instantly “completes” with 0 samples and status switches to `error`, check for `PCAP read error (tshark missing or crashed?)`. Install tshark or switch to Docker.
+6. Environment variable `PYSHARK_TSHARK_PATH`: Set it explicitly if tshark isn’t on PATH.
+
+Minimal native deployment recipe (no Docker):
+
+```bash
+# Build Command
+bash render-build.sh  # script installs tshark + requirements-hosted
+
+# Start Command
+python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+If you use Poetry:
+
+```bash
+# Build Command
+poetry export -f requirements.txt --without-hashes -o requirements.txt
+pip install -r requirements.txt
+
+# OR
+poetry install --no-dev --no-root
+
+# Start Command Option A (pip install path)
+python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# Start Command Option B (poetry environment)
+poetry run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Verification sequence post-deploy:
+
+```bash
+curl -s https://<your-service>/api/pcaps | jq
+curl -s https://<your-service>/api/status | jq
+```
+
+Start detection (example JSON):
+
+```bash
+curl -X POST https://<your-service>/api/start \
+	-H 'Content-Type: application/json' \
+	-d '{"source":"sample-dataset/CIC-DDoS-2019-UDPLag.pcap","threshold":0.5}'
+```
+
+Poll until `samples` rises above 0:
+
+```bash
+watch -n2 curl -s https://<your-service>/api/status | jq .status,.positive_rate,.accuracy
+```
+
+### Local Quick Start (Web Dashboard)
+
+Choose one of the dependency sets:
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements-hosted.txt   # Recommended (TensorFlow CPU + compatible FastAPI)
+# OR
+pip install -r requirements.txt          # Original set (TF 2.7.1)
+```
+
+Run the server:
+
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Start a detection run (example):
+
+```bash
+curl -X POST http://localhost:8000/api/start \
+	-H 'Content-Type: application/json' \
+	-d '{"source":"sample-dataset/CIC-DDoS-2019-UDPLag.pcap","threshold":0.5}'
+```
+
+Open `http://localhost:8000/` for charts and live metrics.
+
+Stop:
+
+```bash
+curl -X POST http://localhost:8000/api/stop
+```
+
+### Smoke Test Script
+
+Run `smoke_test.py` (added in repo) to automatically verify inference produces samples:
+
+```bash
+python smoke_test.py --base-url http://localhost:8000 \
+	--source sample-dataset/CIC-DDoS-2019-UDPLag.pcap \
+	--threshold 0.5
+```
+
+Exit code 0 = success (samples observed). Non‑zero = failure or timeout.
+
+### Presentation Checklist
+
+1. Problem framing: Describe DDoS detection challenge and need for lightweight inference.
+2. Data flow: capture → feature extraction → flow/window assembly → CNN predict → metrics & alerts.
+3. Model: Convolutional architecture; filename encodes time window (t) & max packets (n).
+4. Live loop: windows produce positive ratio + metrics; hysteresis reduces false alerts.
+5. Mitigation simulation: Escalates offending sources (monitor → rate-limit → blackhole) & tracks prevented downtime.
+6. Dashboard: WebSocket stream; charts & forecast (EWMA trend) + explainability (top feature z-scores).
+7. KPIs: TPR/FPR/TTD when labels known (dataset or override) plus cumulative positive_rate.
+8. Deployment: Native vs Docker, interpreter matching, tshark requirement.
+9. Extensions: Real packet filtering, persistence, retraining pipeline.
+10. Demo flow: Start benign PCAP → observe baseline → start attack PCAP → watch fraction rise & mitigation actions.
+
+Use this list as a live walkthrough script.
+
 
 
 ## Acknowledgements

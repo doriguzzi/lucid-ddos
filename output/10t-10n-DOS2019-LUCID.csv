@@ -1,0 +1,2 @@
+Model,Samples,Accuracy,F1Score,Hyper-parameters,Validation Set
+DOS2019-LUCID,408,0.9804,0.9819,"{'batch_size': 1024, 'dropout': None, 'kernels': 32, 'learning_rate': 0.1, 'regularization': None}",./sample-dataset/10t-10n-DOS2019-dataset-val.hdf5

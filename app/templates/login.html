@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LUCID Login</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .card { width: 360px; }
+    .muted { color:#6b7280; font-size:0.9em; }
+  </style>
+</head>
+<body class="theme-light">
+  <div class="card">
+    <h2 style="margin-top:0;">LUCID Demo Login</h2>
+    <form method="post" action="/auth/login">
+      <div class="form-row">
+        <label>Token</label>
+        <input type="password" name="token" placeholder="Enter demo token" required />
+      </div>
+      <div class="buttons">
+        <button type="submit">Continue</button>
+      </div>
+      <p class="muted" style="margin-top:8px;">Set DEMO_TOKEN on the server to enable authentication.</p>
+    </form>
+  </div>
+</body>
+</html>

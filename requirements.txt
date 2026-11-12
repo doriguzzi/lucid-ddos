@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+anyio==4.4.0
+numpy==1.23.5
+scikit-learn==1.2.2
+h5py==3.8.0
+pyshark==0.6
+protobuf==3.19.6
+tensorflow==2.7.1
+tensorflow-estimator==2.7.0
+python-multipart==0.0.9
